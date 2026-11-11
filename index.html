@@ -6,28 +6,29 @@
 <title>Detonationsradius</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
 <link href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" rel="stylesheet">
 <style>
 /* Layout: Vollbild-Nachtkarte, Bedienfeld links (Desktop) bzw. unten (Handy). Bewusst nur ein dunkles Thema. */
 :root {
-  --ink: #0a1017;
-  --land: #17212b;
-  --urban: #233140;
-  --panel: #0e151d;
-  --line: #273442;
-  --text: #e7ecf1;
-  --muted: #8d9aa8;
-  --accent: #ff6a3d;
+  --ink: #0b0c0e;
+  --land: #1c1e22;
+  --urban: #26292e;
+  --panel: #121316;
+  --line: #26282d;
+  --text: #ededef;
+  --muted: #8b8d94;
+  --accent: #e5484d; /* nur für „Zünden“ */
+  --select: #ededef;
   --fx-fireball: #fff1bf;
   --fx-heavy: #ff3b30;
   --fx-rad: #5fd896;
   --fx-moderate: #ff8a3d;
   --fx-thermal: #ffb627;
   --fx-light: #8fa3ff;
-  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
-  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --display: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --body: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, Menlo, monospace;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -49,11 +50,11 @@ body { background: var(--ink); color: var(--text); font: 14px/1.45 var(--body); 
 .grip { display: none; justify-content: center; padding: 2px 0 0; background: none; border: 0; cursor: pointer; }
 .grip span { width: 40px; height: 4px; border-radius: 2px; background: var(--line); }
 
-header h1 { font: 600 26px/1 var(--display); letter-spacing: .02em; text-transform: uppercase; margin: 0; text-wrap: balance; }
+header h1 { font: 700 22px/1.1 var(--display); letter-spacing: -.02em; margin: 0; text-wrap: balance; }
 header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
 
 .field { display: flex; flex-direction: column; gap: 6px; }
-.label { font: 600 12px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.label { font: 500 11px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 
 .search { position: relative; }
 .search input { width: 100%; }
@@ -61,7 +62,7 @@ input[type=text], input[type=number], select {
   background: var(--ink); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
   padding: 10px 12px; font: 15px var(--body); outline: none;
 }
-input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
 .results { position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; z-index: 10; overflow: hidden; display: none; }
 .results.open { display: block; }
 .results button { display: flex; justify-content: space-between; gap: 12px; width: 100%; text-align: left; background: none; border: 0; color: var(--text); padding: 10px 12px; font: 14px var(--body); cursor: pointer; }
@@ -71,11 +72,11 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { flex: none; background: var(--ink); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 7px 12px; font: 13px var(--body); cursor: pointer; white-space: nowrap; }
 .chip b { font-weight: 500; color: var(--muted); margin-left: 4px; font-family: var(--mono); font-size: 12px; }
-.chip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--ink)); }
+.chip.on { border-color: var(--select); background: var(--land); }
 
 .yield-row { display: grid; grid-template-columns: 1fr 74px; gap: 8px; }
 .yield-row input { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-input[type=range] { width: 100%; accent-color: var(--accent); margin: 4px 0 0; }
+input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
 .ticks { display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--muted); }
 
 .seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 3px; }
@@ -83,8 +84,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 4px 0 0; }
 .seg button.on { background: var(--land); color: var(--text); }
 
 .actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
-.btn { border: 0; border-radius: 8px; padding: 12px 16px; font: 600 17px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
-.btn.primary { background: var(--accent); color: #1a0a04; }
+.btn { border: 0; border-radius: 8px; padding: 12px 16px; font: 600 15px/1 var(--body); letter-spacing: 0; cursor: pointer; }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.primary:hover { background: #ec5d61; }
 .btn.primary:disabled { opacity: .45; cursor: default; }
 .btn.ghost { background: none; color: var(--muted); border: 1px solid var(--line); }
 
@@ -115,7 +117,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 4px 0 0; }
 .zoom button + button { border-top: 1px solid var(--line); }
 .zoom button svg { width: 18px; height: 18px; vertical-align: middle; }
 .zoom button.off { color: var(--muted); }
-.timer { font: 600 30px/1 var(--display); letter-spacing: .04em; font-variant-numeric: tabular-nums; color: var(--text); text-shadow: 0 1px 6px rgba(0,0,0,.7); opacity: 0; transition: opacity .3s; }
+.timer { font: 500 28px/1 var(--mono); letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--text); text-shadow: 0 1px 6px rgba(0,0,0,.7); opacity: 0; transition: opacity .3s; }
 .timer small { display: block; font: 500 12px/1.3 var(--body); letter-spacing: 0; color: #cfd8e1; margin-top: 4px; }
 .timer.show { opacity: 1; }
 #map { will-change: transform; }
@@ -133,7 +135,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 4px 0 0; }
 .layers button.on { background: var(--land); color: var(--text); }
 .hint { top: 58px; left: 12px; right: auto; max-width: min(420px, calc(100% - 76px)); margin: 0; }
 .zoom { z-index: 3; }
-.zoom button.on { color: var(--accent); }
+.zoom button.on { color: var(--ink); background: var(--select); }
 .hud { z-index: 3; bottom: 34px; }
 .maptiler-logo { position: absolute; left: 10px; bottom: 6px; z-index: 3; display: block; width: 72px; }
 .maptiler-logo img { width: 100%; display: block; }
@@ -171,7 +173,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 4px 0 0; }
     <div class="zoom">
       <button id="zin" aria-label="Hineinzoomen">+</button>
       <button id="zout" aria-label="Herauszoomen">−</button>
-      <button id="tilt" aria-label="3D-Ansicht umschalten" style="font: 600 13px var(--display); letter-spacing:.06em">3D</button>
+      <button id="tilt" aria-label="3D-Ansicht umschalten" style="font: 600 12px var(--body)">3D</button>
       <button id="replay" aria-label="Explosion erneut abspielen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
       <button id="mute" aria-label="Ton aus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="wave" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="x" d="M17 9l5 6M22 9l-5 6" style="display:none"/></svg></button>
     </div>
@@ -593,6 +595,7 @@ function nearTarget(pt) { if (!state.target) return false; const [x, y] = P(stat
 function clearDetonation() {
   boomToken++; state.detonated = false; state.boom = null; shakes = []; $("stage").style.transform = "";
   $("timer").classList.remove("show");
+  $("hint").textContent = "„Zünden“ startet die Explosion.";
   render();
 }
 function setTarget(ll) {
@@ -667,16 +670,16 @@ function render() {
 }
 
 $("presets").innerHTML = PRESETS.map(p => `<button class="chip" data-kt="${p.kt}">${p.name}<b>${fmtYield(p.kt)}</b></button>`).join("");
-$("presets").addEventListener("click", e => { const c = e.target.closest(".chip"); if (c) setYield(+c.dataset.kt); });
-$("yieldRange").addEventListener("input", e => setYield(Math.pow(10, +e.target.value), true));
-const numChange = () => { const v = parseFloat(String($("yieldNum").value).replace(",", ".")); if (v > 0) setYield(v * +$("yieldUnit").value); };
+$("presets").addEventListener("click", e => { const c = e.target.closest(".chip"); if (c) { setYield(+c.dataset.kt); if (state.detonated || state.boom) clearDetonation(); } });
+$("yieldRange").addEventListener("input", e => { setYield(Math.pow(10, +e.target.value), true); if (state.detonated || state.boom) clearDetonation(); });
+const numChange = () => { const v = parseFloat(String($("yieldNum").value).replace(",", ".")); if (v > 0) { setYield(v * +$("yieldUnit").value); if (state.detonated || state.boom) clearDetonation(); } };
 $("yieldNum").addEventListener("change", numChange);
 $("yieldUnit").addEventListener("change", numChange);
 $("burst").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   state.burst = b.dataset.v;
   document.querySelectorAll("#burst button").forEach(x => x.classList.toggle("on", x === b));
-  render();
+  if (state.detonated || state.boom) clearDetonation(); else render();
 });
 $("go").addEventListener("click", detonate);
 $("reset").addEventListener("click", () => { clearDetonation(); $("hint").textContent = "Auf die Karte tippen oder das Fadenkreuz ziehen, um das Ziel zu setzen"; });
