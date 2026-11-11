@@ -1132,6 +1132,16 @@ function psiAt(dKm, W, burst) {
   const k = Math.log(b[1] / a[1]) / Math.log(b[0] / a[0]);
   return a[1] * Math.pow(x / a[0], k);
 }
+/* Konventionelle Explosionen: viel kürzerer Druckstoß als bei Atomwaffen, daher bei gleichem Überdruck
+   deutlich weniger Tote. Raten so abgestimmt, dass Beirut 2020 (≈ 220 Tote, ≈ 7.000 Verletzte) getroffen wird. */
+function blastRatesConv(psi) {
+  if (psi >= 20) return [0.3, 0.5];
+  if (psi >= 5) return [0.012, 0.25];
+  if (psi >= 2) return [0.001, 0.06];
+  if (psi >= 1) return [0, 0.02];
+  if (psi >= 0.5) return [0, 0.005];
+  return [0, 0];
+}
 function blastRates(psi) { // [Tote, Verletzte] nach OTA 1979
   if (psi >= 12) return [0.98, 0.02];
   if (psi >= 5) return [0.50, 0.40];
@@ -1168,11 +1178,11 @@ async function estimateCasualties(target, W, burst) {
           if (d > R) continue;
           out.total += p;
           for (const e of EFFECTS) if (d <= rad[e.id]) out.inZone[e.id] += p;
-          const [kb, ib] = blastRates(psiAt(d, W, burst));
+          const [kb, ib] = (conv ? blastRatesConv : blastRates)(psiAt(d, W, burst));
           let kh, ih;
           if (conv) {                                   // obere Schätzung: Feuerball tödlich, Glassplitter
-            kh = d <= rad.fireball ? 1 : kb;
-            ih = Math.min(1 - kh, ib + (d > rad.light && d <= rad.glass ? 0.05 : 0));
+            kh = d <= rad.fireball ? Math.max(kb, 0.5) : kb * 2;
+            ih = Math.min(1 - kh, ib * 1.5);
           } else {
             const kr = d <= rad.rad ? 0.6 : 0, kt = d <= rad.thermal ? 0.15 : 0;
             kh = 1 - (1 - kb) * (1 - kr) * (1 - kt);
