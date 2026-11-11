@@ -1,13 +1,22 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Detonationsradius</title>
-<meta name="description" content="Interaktive Karte: Wirkungszonen, Explosion und Opferschätzung für Atomwaffen, konventionelle Bomben und fiktive Szenarien.">
+<title>BlastAtlas – Nuclear and conventional blast simulator</title>
+<meta name="description" content="Interactive blast map: see the effect zones, explosion and estimated casualties of nuclear weapons, conventional bombs and fictional scenarios anywhere in the world.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Detonationsradius">
-<meta property="og:description" content="Wähle eine Waffe und einen Ort und sieh, was eine Explosion dort anrichten würde.">
+<meta property="og:title" content="BlastAtlas">
+<meta property="og:description" content="Pick a weapon and a place and see what an explosion there would do.">
+<meta property="og:url" content="https://blastatlas.com/">
+<meta property="og:image" content="https://blastatlas.com/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://blastatlas.com/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0b0c0e">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"BlastAtlas","url":"https://blastatlas.com/","applicationCategory":"EducationalApplication","operatingSystem":"Any","description":"Interactive blast map showing effect zones, explosion and estimated casualties of nuclear weapons, conventional bombs and fictional scenarios.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
 <link href="vendor/maplibre-gl-5.24.0/maplibre-gl.css" rel="stylesheet">
 <style>
 /* Schriften lokal (SIL Open Font License, siehe fonts/OFL-Geist.txt) – kein Abruf bei Google */
@@ -59,7 +68,7 @@ body { background: var(--ink); color: var(--text); font: 14px/1.45 var(--body); 
   .grip { display: flex !important; padding: 4px 0 6px; touch-action: none; }
   .panel > * { flex: none; }
   .panel .grip { order: 0; } .panel .actions { order: 1; } #weaponField { order: 2; } .panel .search { order: 3; }
-  #yieldField { order: 4; } #kindField { order: 5; } #burstField { order: 6; } .panel .legend { order: 7; } .panel .foot { order: 9; }
+  #yieldField { order: 4; } #kindField { order: 5; } #burstField { order: 6; } #unitsField { order: 7; } .panel .legend { order: 8; } .panel .foot { order: 9; }
   .panel header { display: none; }
   .panel input[type=text], .panel input[type=number], .panel select { font-size: 16px; }
   .btn { padding: 14px 16px; }
@@ -222,156 +231,165 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
 <body>
 <div class="toast" id="toast" role="status"></div>
 <dialog class="sources" id="sources" aria-labelledby="srcTitle">
-  <div class="src-head"><h2 id="srcTitle">Quellen &amp; Methodik</h2><button class="src-close" id="closeSources" aria-label="Schließen">×</button></div>
+  <div class="src-head"><h2 id="srcTitle">Sources &amp; methodology</h2><button class="src-close" id="closeSources" aria-label="Close">×</button></div>
   <div class="src-body">
-    <p class="src-note">Die Seite ist eine Simulation zur Veranschaulichung. Alle Werte sind Näherungen; Wetter, Gelände, Bebauung, Tageszeit und Warnung verändern die Folgen im Ernstfall erheblich.</p>
+    <p class="src-note">BlastAtlas is a simulation for illustration. All values are approximations; weather, terrain, buildings, time of day and warning time change the real-world consequences considerably.</p>
 
-    <h3>Karten und Ortsdaten</h3>
+    <h3>Maps and place data</h3>
     <ul>
-      <li>Kartenkacheln, Satellitenbilder und Gebäude: <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">© MapTiler</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap-Mitwirkende</a> (Open Database License)</li>
-      <li>Ortssuche: <a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a>, gemeinfrei</li>
-      <li>Kartendarstellung: <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre GL JS</a>, BSD-3-Lizenz</li>
-      <li>Schrift: Geist und Geist Mono (Vercel), SIL Open Font License 1.1. Schriften und Kartenbibliothek liegen auf dieser Seite selbst, es werden keine Daten an Google oder CDNs übertragen.</li>
+      <li>Map tiles, satellite imagery and buildings: <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">© MapTiler</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> (Open Database License)</li>
+      <li>Place search: <a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a>, public domain</li>
+      <li>Map rendering: <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre GL JS</a>, BSD-3 licence</li>
+      <li>Typeface: Geist and Geist Mono (Vercel), SIL Open Font License 1.1. Fonts and the map library are served from this site; no data is sent to Google or third-party CDNs.</li>
     </ul>
 
-    <h3>Bevölkerung</h3>
+    <h3>Population</h3>
     <ul>
-      <li>Schiavina, M.; Freire, S.; Carioli, A.; MacManus, K. (2023): GHS-POP R2023A – GHS population grid multitemporal (1975–2030). Europäische Kommission, Gemeinsame Forschungsstelle (JRC). <a href="https://doi.org/10.2905/2FF68A52-5B5B-4A22-8F40-C41DA8332CFE" target="_blank" rel="noopener">doi:10.2905/2FF68A52-5B5B-4A22-8F40-C41DA8332CFE</a>. Verwendet: Stand 2025, Raster 30 Bogensekunden (≈ 1 km). © Europäische Union, Weiterverwendung mit Quellenangabe gestattet.</li>
-      <li>Methodik: Pesaresi, M. u. a. (2024): Advances on the Global Human Settlement Layer by Joint Assessment of Earth Observation and Population Survey Data. International Journal of Digital Earth 17(1). <a href="https://doi.org/10.1080/17538947.2024.2390454" target="_blank" rel="noopener">doi:10.1080/17538947.2024.2390454</a></li>
-      <li>Gezählt wird die Wohnbevölkerung (wo Menschen gemeldet sind), nicht, wo sie sich tagsüber aufhalten.</li>
+      <li>Schiavina, M.; Freire, S.; Carioli, A.; MacManus, K. (2023): GHS-POP R2023A – GHS population grid multitemporal (1975–2030). European Commission, Joint Research Centre (JRC). <a href="https://doi.org/10.2905/2FF68A52-5B5B-4A22-8F40-C41DA8332CFE" target="_blank" rel="noopener">doi:10.2905/2FF68A52-5B5B-4A22-8F40-C41DA8332CFE</a>. Used: epoch 2025, 30 arc-second grid (≈ 1 km). © European Union; reuse is authorised provided the source is acknowledged.</li>
+      <li>Methodology: Pesaresi, M. et al. (2024): Advances on the Global Human Settlement Layer by Joint Assessment of Earth Observation and Population Survey Data. International Journal of Digital Earth 17(1). <a href="https://doi.org/10.1080/17538947.2024.2390454" target="_blank" rel="noopener">doi:10.1080/17538947.2024.2390454</a></li>
+      <li>The data counts residential population (where people live), not where they are during the day.</li>
     </ul>
 
-    <h3>Wirkungsmodell</h3>
+    <h3>Effects model</h3>
     <ul>
-      <li>Atomwaffen: Skalierungsgesetze nach Glasstone, S.; Dolan, P. J. (1977): The Effects of Nuclear Weapons, 3. Auflage. U.S. Department of Defense / Energy Research and Development Administration. Radien für Feuerball, Druckwelle (20, 5 und 1 psi), Hitzestrahlung (Verbrennungen 3. Grades) und Anfangsstrahlung (500 rem) als Näherungsformeln.</li>
-      <li>Konventionelle Explosionen: TNT-Skalierung der Druckwelle nach den Kurven von Kingery, C. N.; Bulmash, G. (1984), U.S. Army Ballistic Research Laboratory, bodennahe Detonation. Feuerball als gängige empirische Näherung.</li>
-      <li>Ankunftszeit der Druckwelle, Pilzgröße und Zerstörungsbild: vereinfachte eigene Näherungen zur Darstellung.</li>
+      <li>Nuclear weapons: scaling laws after Glasstone, S.; Dolan, P. J. (1977): The Effects of Nuclear Weapons, 3rd edition. U.S. Department of Defense / Energy Research and Development Administration. Radii for fireball, blast (20, 5 and 1 psi), thermal radiation (3rd-degree burns) and initial radiation (500 rem) as approximation formulas.</li>
+      <li>Conventional explosions: TNT blast scaling following the curves of Kingery, C. N.; Bulmash, G. (1984), U.S. Army Ballistic Research Laboratory, surface burst. Fireball from a common empirical approximation.</li>
+      <li>Shock arrival times, mushroom cloud size and damage visuals: simplified approximations of our own for display purposes.</li>
     </ul>
 
-    <h3>Opferschätzung</h3>
+    <h3>Casualty estimate</h3>
     <ul>
-      <li>Anteil Tote und Verletzte je Überdruckbereich nach U.S. Congress, Office of Technology Assessment (1979): The Effects of Nuclear War.</li>
-      <li>Obere Schätzung: eigene Ergänzung um Hitze- und Anfangsstrahlung (nuklear) bzw. Feuerball und Glassplitter (konventionell). Fallout und Feuerstürme sind nicht enthalten.</li>
+      <li>Share of deaths and injuries per overpressure band after U.S. Congress, Office of Technology Assessment (1979): The Effects of Nuclear War.</li>
+      <li>Conventional explosions: lower rates because of the much shorter blast pulse, calibrated to the 2020 Beirut explosion.</li>
+      <li>Upper estimate: our own addition of thermal and initial radiation (nuclear) or fireball and flying glass (conventional). Fallout and firestorms are not included.</li>
     </ul>
 
-    <h3>Sprengkräfte der Waffen</h3>
+    <h3>Weapon yields</h3>
     <ul>
-      <li>Allgemein: öffentlich zugängliche Angaben; bei Schätzungen der gängige Wert, die Spanne steht in der Beschreibung.</li>
-      <li>Trinity (24,8 kt): <a href="https://www.lanl.gov/media/publications/1663/0922-revising-trinity" target="_blank" rel="noopener">Los Alamos National Laboratory, Neubewertung 2021</a></li>
-      <li>Zar-Bombe, Sundial, Gnomon: <a href="https://thebulletin.org/2021/11/the-untold-story-of-the-worlds-biggest-nuclear-bomb/" target="_blank" rel="noopener">Wellerstein, A. (2021), Bulletin of the Atomic Scientists</a></li>
+      <li>General: publicly available figures; where estimates differ, the commonly cited value is used and the range is given in the description.</li>
+      <li>Trinity (24.8 kt): <a href="https://www.lanl.gov/media/publications/1663/0922-revising-trinity" target="_blank" rel="noopener">Los Alamos National Laboratory, 2021 reassessment</a></li>
+      <li>Tsar Bomba, Sundial, Gnomon: <a href="https://thebulletin.org/2021/11/the-untold-story-of-the-worlds-biggest-nuclear-bomb/" target="_blank" rel="noopener">Wellerstein, A. (2021), Bulletin of the Atomic Scientists</a></li>
       <li>R-36M2 (SS-18): <a href="https://programs.fas.org/ssp/nukes/nuclearweapons/russia_nukescurrent/ss18.html" target="_blank" rel="noopener">Federation of American Scientists</a></li>
       <li>Smiling Buddha: <a href="https://www.atomicarchive.com/history/cold-war/page-17.html" target="_blank" rel="noopener">Atomic Archive</a></li>
-      <li>Nordkorea 2017: Schätzung von 38 North (≈ 250 kt), weitere Schätzungen 50–300 kt</li>
-      <li>Beirut 2020: <a href="https://doi.org/10.1038/s41598-021-93690-y" target="_blank" rel="noopener">Pilger u. a. (2021), Scientific Reports</a>; <a href="https://www.osti.gov/biblio/1688581" target="_blank" rel="noopener">Goldstein (2020), Lawrence Livermore National Laboratory</a>; Rigby u. a. (2020), Shock Waves</li>
-      <li>MOAB, ATBIP, Tianjin, Halifax, Helgoland, Minor Scale: Angaben des US-Verteidigungsministeriums bzw. gängige Übersichten zu den größten nichtnuklearen Explosionen; die ATBIP-Angabe stammt von russischer Seite und ist nicht unabhängig bestätigt.</li>
-      <li>Fiktive Waffen: Angaben aus dem jeweiligen Werk; wo das Werk keine Zahl nennt, ist ein plausibler Wert angesetzt.</li>
+      <li>North Korea 2017: 38 North estimate (≈ 250 kt); other estimates 50–300 kt</li>
+      <li>Beirut 2020: <a href="https://doi.org/10.1038/s41598-021-93690-y" target="_blank" rel="noopener">Pilger et al. (2021), Scientific Reports</a>; <a href="https://www.osti.gov/biblio/1688581" target="_blank" rel="noopener">Goldstein (2020), Lawrence Livermore National Laboratory</a>; Rigby et al. (2020), Shock Waves</li>
+      <li>MOAB, ATBIP, Tianjin, Halifax, Heligoland, Minor Scale: US Department of Defense figures and common overviews of the largest non-nuclear explosions; the ATBIP figure is a Russian claim and has not been independently confirmed.</li>
+      <li>Fictional weapons: figures from the respective work; where the work gives no number, a plausible value is used.</li>
     </ul>
   </div>
 </dialog>
 <div class="app">
   <div class="map-wrap">
     <div class="stage" id="stage">
-      <div id="map" aria-label="Karte. Tippen setzt den Zielpunkt."></div>
+      <div id="map" aria-label="Map. Tap to set the target."></div>
       <canvas id="fxlayer"></canvas>
     </div>
-    <div class="layers" id="layers" role="group" aria-label="Kartenebene">
-      <button data-v="map" class="on">Karte</button>
-      <button data-v="sat">Satellit</button>
+    <div class="layers" id="layers" role="group" aria-label="Map layer">
+      <button data-v="map" class="on">Map</button>
+      <button data-v="sat">Satellite</button>
     </div>
-    <div class="hint" id="hint">Auf die Karte tippen oder das Fadenkreuz ziehen, um das Ziel zu setzen</div>
+    <div class="hint" id="hint">Tap the map or drag the crosshair to set the target</div>
     <div class="zoom">
-      <button id="zin" aria-label="Hineinzoomen">+</button>
-      <button id="zout" aria-label="Herauszoomen">−</button>
-      <button id="tilt" aria-label="3D-Ansicht umschalten" style="font: 600 12px var(--body)">3D</button>
-      <button id="replay" aria-label="Explosion erneut abspielen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
-      <button id="mute" aria-label="Ton aus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="wave" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="x" d="M17 9l5 6M22 9l-5 6" style="display:none"/></svg></button>
+      <button id="zin" aria-label="Zoom in">+</button>
+      <button id="zout" aria-label="Zoom out">−</button>
+      <button id="tilt" aria-label="Toggle 3D view" style="font: 600 12px var(--body)">3D</button>
+      <button id="replay" aria-label="Replay explosion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+      <button id="mute" aria-label="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="wave" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="x" d="M17 9l5 6M22 9l-5 6" style="display:none"/></svg></button>
     </div>
     <div class="hud">
       <div class="timer" id="timer"><span id="tval">T + 0,0 s</span><small id="tphase"></small></div>
     </div>
     <a class="maptiler-logo" href="https://www.maptiler.com" target="_blank" rel="noopener"><img src="https://api.maptiler.com/resources/logo.svg" alt="MapTiler"></a>
-    <section class="legend" id="legend" aria-label="Wirkungszonen">
+    <section class="legend" id="legend" aria-label="Effect zones">
       <div class="legend-top">
         <button class="legend-head" id="legendToggle" aria-expanded="true">
-          <span class="label">Wirkungszonen</span>
+          <span class="label">Effect zones</span>
           <span class="legend-sum" id="summary"></span>
           <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 15l6-6 6 6"/></svg>
         </button>
-        <button class="zswitch" id="zoneSwitch" role="switch" aria-checked="true" title="Radien auf der Karte ein- oder ausblenden">
-          <span>Radien</span><i></i>
+        <button class="zswitch" id="zoneSwitch" role="switch" aria-checked="true" title="Show or hide the radii on the map">
+          <span>Radii</span><i></i>
         </button>
       </div>
       <div class="cas" id="cas" hidden>
         <div class="cas-row">
-          <div><span class="cas-k">Tote</span><span class="cas-v" id="casDead">–</span></div>
-          <div><span class="cas-k">Verletzte</span><span class="cas-v" id="casInj">–</span></div>
+          <div><span class="cas-k">Deaths</span><span class="cas-v" id="casDead">–</span></div>
+          <div><span class="cas-k">Injuries</span><span class="cas-v" id="casInj">–</span></div>
         </div>
         <p class="cas-note" id="casNote"></p>
       </div>
       <ul class="fx" id="fx"></ul>
     </section>
-    <div class="mcas" id="mcas" hidden><span>Tote<b class="dead" id="mDead">–</b></span><span>Verletzte<b id="mInj">–</b></span></div>
+    <div class="mcas" id="mcas" hidden><span>Deaths<b class="dead" id="mDead">–</b></span><span>Injuries<b id="mInj">–</b></span></div>
     <div class="flash" id="flash"></div>
   </div>
 
   <aside class="panel" id="panel">
-    <button class="grip" id="grip" aria-label="Bedienfeld ein- oder ausklappen"><span></span></button>
+    <button class="grip" id="grip" aria-label="Expand or collapse controls"><span></span></button>
     <header>
-      <h1>Detonationsradius</h1>
-      <p>Wirkungszonen einer Kernexplosion auf der Karte</p>
+      <h1>BlastAtlas</h1>
+      <p>See what an explosion would do, anywhere on Earth</p>
     </header>
 
     <div class="field search">
-      <label class="label" for="q">Ort</label>
-      <input type="text" id="q" placeholder="Stadt suchen, z. B. Hamburg" autocomplete="off">
+      <label class="label" for="q">Location</label>
+      <input type="text" id="q" placeholder="Search a city, e.g. London" autocomplete="off">
       <div class="results" id="results" role="listbox"></div>
     </div>
 
     <div class="field" id="weaponField">
-      <span class="label">Waffe</span>
-      <select id="weapon" aria-label="Waffe auswählen"></select>
+      <span class="label">Weapon</span>
+      <select id="weapon" aria-label="Choose a weapon"></select>
       <p class="weapon-info" id="weaponInfo"></p>
     </div>
 
     <div class="field" id="yieldField">
-      <label class="label" for="yieldNum">Sprengkraft</label>
+      <label class="label" for="yieldNum">Yield</label>
       <div class="yield-row">
         <input type="number" id="yieldNum" min="0.01" step="any" inputmode="decimal">
-        <select id="yieldUnit" aria-label="Einheit"><option value="0.001">t</option><option value="1">kt</option><option value="1000">Mt</option><option value="1000000">Gt</option></select>
+        <select id="yieldUnit" aria-label="Unit"><option value="0.001">t</option><option value="1">kt</option><option value="1000">Mt</option><option value="1000000">Gt</option></select>
       </div>
-      <input type="range" id="yieldRange" min="-2" max="7" step="0.01" aria-label="Sprengkraft, logarithmisch">
+      <input type="range" id="yieldRange" min="-2" max="7" step="0.01" aria-label="Yield, logarithmic">
       <div class="ticks"><span>10 t</span><span>10 kt</span><span>10 Mt</span><span>10 Gt</span></div>
     </div>
 
     <div class="field" id="kindField">
-      <span class="label">Art</span>
+      <span class="label">Type</span>
       <div class="seg" id="kind">
-        <button data-v="nuc" class="on">Nuklear</button>
-        <button data-v="conv">Konventionell</button>
+        <button data-v="nuc" class="on">Nuclear</button>
+        <button data-v="conv">Conventional</button>
       </div>
     </div>
 
     <div class="field" id="burstField">
-      <span class="label">Detonation</span>
+      <span class="label">Burst</span>
       <div class="seg" id="burst">
-        <button data-v="air" class="on">In der Luft</button>
-        <button data-v="surface">Am Boden</button>
+        <button data-v="air" class="on">Airburst</button>
+        <button data-v="surface">Surface</button>
+      </div>
+    </div>
+
+    <div class="field" id="unitsField">
+      <span class="label">Units</span>
+      <div class="seg" id="units">
+        <button data-v="metric" class="on">Metric (km)</button>
+        <button data-v="imperial">Imperial (mi)</button>
       </div>
     </div>
 
     <div class="actions">
-      <button class="btn primary" id="go">Zünden</button>
-      <button class="btn ghost" id="reset">Zurücksetzen</button>
-      <button class="btn ghost share" id="share" aria-label="Szenario teilen" title="Szenario teilen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></button>
+      <button class="btn primary" id="go">Detonate</button>
+      <button class="btn ghost" id="reset">Reset</button>
+      <button class="btn ghost share" id="share" aria-label="Share scenario" title="Share scenario"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></button>
     </div>
 
 
 
     <div class="foot">
-      <p>Radien sind Näherungen nach den Skalierungsgesetzen aus Glasstone &amp; Dolan, „The Effects of Nuclear Weapons“ (1977). Wetter, Gelände und Bebauung verschieben sie im Ernstfall deutlich. Fallout ist noch nicht enthalten.</p>
-      <p>Opfermodell: Druckwellen-Raten nach U.S. Office of Technology Assessment (1979), ergänzt um Hitze- und Anfangsstrahlung. Bevölkerung: GHSL GHS-POP 2025, © Europäische Union (JRC). Gezählt wird die Wohnbevölkerung, tagsüber kann die Verteilung stark abweichen.</p>
-      <p>Karten © MapTiler © OpenStreetMap-Mitwirkende. Ortssuche: Natural Earth.</p>
-      <p><button class="linkbtn" id="openSources">Quellen &amp; Methodik</button></p>
+      <p>Radii are approximations based on the scaling laws in Glasstone &amp; Dolan, “The Effects of Nuclear Weapons” (1977). Weather, terrain and buildings shift them considerably in reality. Fallout is not yet included.</p>
+      <p>Casualties: blast rates after the U.S. Office of Technology Assessment (1979), plus thermal and initial radiation. Population: GHSL GHS-POP 2025, © European Union (JRC). Counts residential population; daytime distribution can differ greatly.</p>
+      <p>Maps © MapTiler © OpenStreetMap contributors. Place search: Natural Earth.</p>
+      <p><button class="linkbtn" id="openSources">Sources &amp; methodology</button></p>
     </div>
   </aside>
 </div>
@@ -386,24 +404,24 @@ const STYLES = {
 
 /* ---------- Wirkungsmodell (W in Kilotonnen, Radien in km) ---------- */
 const EFFECTS_NUC = [
-  { id: "fireball", name: "Feuerball", unit: "", color: "--fx-fireball",
+  { id: "fireball", name: "Fireball", unit: "", color: "--fx-fireball",
     r: (W, b) => 0.07 * Math.pow(W, 0.4) * (b === "surface" ? 1.26 : 1),
-    desc: b => b === "surface" ? "Alles im Feuerball verdampft. Am Boden entsteht ein Krater, der Boden wird stark radioaktiv." : "Alles im Feuerball verdampft. Bei optimaler Höhe berührt er den Boden meist nicht." },
-  { id: "heavy", name: "Schwere Druckwelle", unit: "20 psi · 1,4 bar", color: "--fx-heavy",
+    desc: b => b === "surface" ? "Everything inside the fireball is vaporised. A crater forms and the ground becomes highly radioactive." : "Everything inside the fireball is vaporised. At the optimal burst height it usually does not touch the ground." },
+  { id: "heavy", name: "Heavy blast damage", unit: "20 psi · 1.4 bar", color: "--fx-heavy",
     r: (W, b) => (b === "surface" ? 0.17 : 0.20) * Math.cbrt(W),
-    desc: () => "Auch Stahlbetonbauten werden zerstört oder schwer beschädigt. Kaum jemand überlebt." },
-  { id: "rad", name: "Anfangsstrahlung", unit: "500 rem · 5 Sv", color: "--fx-rad",
+    desc: () => "Even reinforced concrete buildings are destroyed or severely damaged. Almost no one survives." },
+  { id: "rad", name: "Initial radiation", unit: "500 rem · 5 Sv", color: "--fx-rad",
     r: (W) => 0.70 * Math.pow(W, 0.2),
-    desc: () => "Ohne medizinische Behandlung sterben 50 bis 90 % der Betroffenen innerhalb weniger Wochen." },
-  { id: "moderate", name: "Mittlere Druckwelle", unit: "5 psi · 0,34 bar", color: "--fx-moderate",
+    desc: () => "Without medical treatment, 50 to 90% of those exposed die within a few weeks." },
+  { id: "moderate", name: "Moderate blast damage", unit: "5 psi · 0.34 bar", color: "--fx-moderate",
     r: (W, b) => (b === "surface" ? 0.36 : 0.47) * Math.cbrt(W),
-    desc: () => "Die meisten Wohnhäuser stürzen ein, Brände breiten sich aus. Sehr viele Tote und Verletzte." },
-  { id: "thermal", name: "Hitzestrahlung", unit: "Verbrennungen 3. Grades", color: "--fx-thermal",
+    desc: () => "Most residential buildings collapse and fires spread. Very high numbers of deaths and injuries." },
+  { id: "thermal", name: "Thermal radiation", unit: "3rd-degree burns", color: "--fx-thermal",
     r: (W, b) => 0.61 * Math.pow(W, 0.42) * (b === "surface" ? 0.8 : 1),
-    desc: () => "Ungeschützte Haut verbrennt bis in tiefe Schichten, oft tödlich. Holz und Stoffe fangen Feuer." },
-  { id: "light", name: "Leichte Druckwelle", unit: "1 psi · 0,07 bar", color: "--fx-light",
+    desc: () => "Exposed skin suffers full-thickness burns, often fatal. Wood and fabric catch fire." },
+  { id: "light", name: "Light blast damage", unit: "1 psi · 0.07 bar", color: "--fx-light",
     r: (W, b) => (b === "surface" ? 0.92 : 1.22) * Math.cbrt(W),
-    desc: () => "Fenster bersten. Glassplitter verletzen viele Menschen, die sich in Gebäuden aufhalten." },
+    desc: () => "Windows shatter. Flying glass injures many people indoors." },
 ];
 const burstHeightKm = W => 0.24 * Math.cbrt(W); // für 5 psi optimiert (Hiroshima: 15 kt ≈ 600 m)
 /* Pilz: Radius des Pilzhuts in km. Die Sprengkraft wird auf 5-kt-Stufen gerundet,
@@ -414,21 +432,21 @@ const cloudRadiusKm = W => Math.pow(mushroomKt(W), 0.36); // 15 kt ≈ 2,6 km, 1
    Druck-Abstände nach den üblichen TNT-Skalierungskurven (Kingery-Bulmash), in km pro kt^(1/3).
    Feuerball: Durchmesser ≈ 3,86 · m^0,32 m (m in kg TNT). */
 const EFFECTS_CONV = [
-  { id: "fireball", name: "Feuerball", unit: "", color: "--fx-fireball",
+  { id: "fireball", name: "Fireball", unit: "", color: "--fx-fireball",
     r: W => 0.161 * Math.pow(W, 0.32) * (state.thermo ? 1.8 : 1),
-    desc: () => state.thermo ? "Thermobarische Waffe: Die Treibstoffwolke verbrennt in einem großen Feuerball und verbraucht den Sauerstoff." : "Flammen und Hitze im Feuerball sind für fast alle tödlich, dazu kommen Trümmer und Splitter." },
-  { id: "heavy", name: "Schwere Druckwelle", unit: "20 psi · 1,4 bar", color: "--fx-heavy",
+    desc: () => state.thermo ? "Thermobaric weapon: the fuel cloud burns in a large fireball and consumes the oxygen." : "Flames and heat inside the fireball are lethal to almost everyone, plus debris and fragments." },
+  { id: "heavy", name: "Heavy blast damage", unit: "20 psi · 1.4 bar", color: "--fx-heavy",
     r: W => 0.28 * Math.cbrt(W),
-    desc: () => "Gebäude werden zerstört oder bis auf das Gerippe abgedeckt. Kaum jemand überlebt." },
-  { id: "moderate", name: "Mittlere Druckwelle", unit: "5 psi · 0,34 bar", color: "--fx-moderate",
+    desc: () => "Buildings are destroyed or stripped to their frames. Almost no one survives." },
+  { id: "moderate", name: "Moderate blast damage", unit: "5 psi · 0.34 bar", color: "--fx-moderate",
     r: W => 0.55 * Math.cbrt(W),
-    desc: () => "Wohnhäuser stürzen ein oder werden schwer beschädigt. Viele Tote und Schwerverletzte." },
-  { id: "light", name: "Leichte Druckwelle", unit: "1 psi · 0,07 bar", color: "--fx-light",
+    desc: () => "Houses collapse or are severely damaged. Many deaths and serious injuries." },
+  { id: "light", name: "Light blast damage", unit: "1 psi · 0.07 bar", color: "--fx-light",
     r: W => 1.79 * Math.cbrt(W),
-    desc: () => "Fenster, Türen und Zwischenwände werden herausgerissen. Viele Verletzte durch Glas und Trümmer." },
-  { id: "glass", name: "Glasbruch", unit: "0,5 psi · 0,03 bar", color: "--fx-glass",
+    desc: () => "Windows, doors and interior walls are blown out. Many injuries from glass and debris." },
+  { id: "glass", name: "Glass breakage", unit: "0.5 psi · 0.03 bar", color: "--fx-glass",
     r: W => 3.2 * Math.cbrt(W),
-    desc: () => "Fensterscheiben bersten. Je nach Wetter reicht der Glasbruch noch deutlich weiter, in Beirut bis etwa 10 km." },
+    desc: () => "Window panes break. Depending on the weather, glass damage can reach much further; in Beirut it extended to about 10 km (6 mi)." },
 ];
 let EFFECTS = EFFECTS_NUC;
 const BLAST_NUC = { heavy: 1, moderate: 0.65, light: 0.35 }; // Stärke für Wackeln/Vibration
@@ -459,77 +477,87 @@ function fmtSec(s) { return s < 10 ? nf(s, 1) + " s" : s < 120 ? nf(s, 0) + " s"
 /* Waffen und Tests. Sprengkräfte nach öffentlich zugänglichen Angaben, bei Schätzungen der gängige Wert. */
 const PRESETS = [
   // USA
-  { name: "Trinity („Gadget“)", kt: 24.8, country: "USA", year: "1945", note: "Erster Kernwaffentest der Welt, New Mexico. Neubewertung von 2021, lange galten 21 kt." },
-  { name: "Little Boy", kt: 15, country: "USA", year: "1945", note: "Uranbombe, über Hiroshima abgeworfen." },
-  { name: "Fat Man", kt: 21, country: "USA", year: "1945", note: "Plutoniumbombe, über Nagasaki abgeworfen." },
-  { name: "Ivy Mike", kt: 10400, country: "USA", year: "1952", note: "Erster Test einer Wasserstoffbombe, Eniwetok-Atoll. Kein einsetzbarer Sprengkörper." },
-  { name: "Castle Bravo", kt: 15000, country: "USA", year: "1954", note: "Größter US-Test, Bikini-Atoll. Fiel fast dreimal so stark aus wie erwartet." },
-  { name: "Davy Crockett (W54)", kt: 0.02, country: "USA", year: "1961–1971", note: "Kleinste je stationierte Kernwaffe, von einer Art Rückstoßgeschütz abgefeuert." },
-  { name: "Starfish Prime", kt: 1400, country: "USA", year: "1962", note: "Höhenexplosion rund 400 km über dem Pazifik, löste einen starken elektromagnetischen Puls aus." },
-  { name: "B53", kt: 9000, country: "USA", year: "1962–1997", note: "Freifallbombe, lange die stärkste Waffe im US-Arsenal." },
-  { name: "B61-12", kt: 50, country: "USA", year: "aktuell", note: "Freifallbombe mit einstellbarer Sprengkraft, auch in Europa stationiert (Höchstwert)." },
-  { name: "W76-1", kt: 90, country: "USA", year: "aktuell", note: "Sprengkopf der U-Boot-Rakete Trident II, häufigster US-Sprengkopf." },
-  { name: "W87", kt: 300, country: "USA", year: "aktuell", note: "Sprengkopf der landgestützten Interkontinentalrakete Minuteman III." },
-  { name: "W88", kt: 475, country: "USA", year: "aktuell", note: "Stärkerer Sprengkopf der Trident II." },
-  { name: "B83", kt: 1200, country: "USA", year: "aktuell", note: "Stärkste Waffe im heutigen US-Arsenal, Freifallbombe." },
-  // Sowjetunion / Russland
-  { name: "RDS-1", group: "Sowjetunion / Russland", kt: 22, country: "Sowjetunion", year: "1949", note: "Erster sowjetischer Kernwaffentest, Semipalatinsk (Kasachstan)." },
-  { name: "RDS-37", group: "Sowjetunion / Russland", kt: 1600, country: "Sowjetunion", year: "1955", note: "Erste sowjetische zweistufige Wasserstoffbombe." },
-  { name: "Zar-Bombe (AN602)", vstyle: "tsar", group: "Sowjetunion / Russland", kt: 50000, country: "Sowjetunion", year: "1961", note: "Stärkste je gezündete Explosion, über Nowaja Semlja." },
-  { name: "R-36M2 (SS-18), Einzelsprengkopf", group: "Sowjetunion / Russland", kt: 20000, country: "Sowjetunion / Russland", year: "1991", note: "Schwerer Einzelsprengkopf der größten Interkontinentalrakete." },
-  // Weitere Staaten
-  { name: "Hurricane", kt: 25, country: "Großbritannien", year: "1952", note: "Erster britischer Kernwaffentest, in einem Schiff vor Australien gezündet." },
-  { name: "Gerboise Bleue", kt: 70, country: "Frankreich", year: "1960", note: "Erster französischer Test, in der algerischen Sahara." },
-  { name: "TN 75", kt: 100, country: "Frankreich", year: "aktuell", note: "Sprengkopf der französischen U-Boot-Raketen." },
-  { name: "Projekt 596", kt: 22, country: "China", year: "1964", note: "Erster chinesischer Kernwaffentest, Lop Nur." },
-  { name: "Smiling Buddha", kt: 8, country: "Indien", year: "1974", note: "Erster indischer Test, Pokhran. Offiziell 12 kt, Schätzungen liegen niedriger." },
-  { name: "6. Kernwaffentest", kt: 250, country: "Nordkorea", year: "2017", note: "Stärkster nordkoreanischer Test, Punggye-ri. Schätzung, die Angaben reichen von etwa 50 bis 300 kt." },
-  // Konventionelle (chemische) Explosionen, Sprengkraft als TNT-Äquivalent
-  { name: "Tomahawk-Marschflugkörper", kt: 0.0005, type: "conv", smoke: "dark", country: "USA", year: "seit 1983", note: "Sprengkopf entspricht etwa 500 kg TNT." },
-  { name: "GBU-43/B MOAB", kt: 0.011, type: "conv", smoke: "dark", country: "USA", year: "2003", note: "„Mother of All Bombs“, größte konventionelle Bombe der USA. 2017 erstmals in Afghanistan eingesetzt." },
-  { name: "ATBIP „Vater aller Bomben“", kt: 0.044, type: "conv", smoke: "dark", thermo: true, group: "Sowjetunion / Russland", country: "Russland", year: "2007", note: "Thermobarische Bombe. Die 44 t TNT sind eine russische Angabe und unabhängig nicht bestätigt." },
-  { name: "Explosion im Hafen von Tianjin", kt: 0.3, type: "conv", smoke: "dark", approx: true, country: "China", year: "2015", note: "Chemikalienlager, 173 Tote. Schätzungen für die zweite, große Explosion reichen von 21 t (seismisch) bis 500 t TNT." },
-  { name: "Explosion im Hafen von Beirut", kt: 1, type: "conv", smoke: "nitrate", country: "Libanon", year: "2020", note: "Rund 2.750 t Ammoniumnitrat explodierten, über 200 Tote und mehr als 6.000 Verletzte. Studien schätzen 0,5 bis 1,4 kt TNT." },
-  { name: "Halifax-Explosion", kt: 2.9, type: "conv", smoke: "white", country: "Kanada", year: "1917", note: "Ein Munitionsfrachter explodierte nach einer Kollision im Hafen, rund 2.000 Tote. Größte menschengemachte Explosion vor der Atombombe." },
-  { name: "Sprengung von Helgoland („Big Bang“)", kt: 3.2, type: "conv", smoke: "white", country: "Großbritannien", year: "1947", note: "Die Royal Navy sprengte rund 6.700 t Weltkriegsmunition auf der deutschen Insel." },
-  { name: "Minor Scale", kt: 4, type: "conv", smoke: "white", country: "USA", year: "1985", note: "Größte geplante konventionelle Sprengung: 4.744 t ANFO, um die Druckwelle einer Atomexplosion nachzubilden." },
-  // Geplant, nie gebaut oder nie in voller Stärke gezündet
-  { name: "Sundial", kt: 1e7, country: "USA", year: "1954", group: "Nie produziert oder fiktiv", special: true, note: "Entwurf von Edward Teller, nie gebaut. Bei dieser Größe gelten die üblichen Skalierungsgesetze nicht mehr, die Radien sind nur eine grobe Hochrechnung." },
-  { name: "Gnomon", kt: 1e6, country: "USA", year: "1954", group: "Nie produziert oder fiktiv", special: true, note: "Sollte als Zündstufe für Sundial dienen. Ein Prototyp-Test war für 1956 geplant, fand aber nie statt. Radien nur grobe Hochrechnung." },
-  { name: "Zar-Bombe in voller Stärke", vstyle: "tsar", kt: 100000, country: "Sowjetunion", year: "1961", group: "Nie produziert oder fiktiv", special: true, note: "Ausgelegt auf 100 Mt, gezündet wurde aber nur die halbe Stärke." },
-  { name: "T-15-Torpedo", kt: 100000, country: "Sowjetunion", year: "1950er", group: "Nie produziert oder fiktiv", special: true, note: "Riesentorpedo gegen Häfen, 1954 eingestellt. Die oft genannten 100 Mt sind umstritten, möglicherweise war nur ein Sprengkopf von wenigen Megatonnen vorgesehen." },
-  // Fiktiv (Filme, Bücher, Spiele). approx: aus dem Werk abgeleitet; assumed: im Werk nicht genannt
-  { name: "Mini-Atombombe „Fat Man“", kt: 0.02, country: "Fiktion", origin: "Spiel: Fallout", year: "ab 1997", group: "Nie produziert oder fiktiv", special: true, assumed: true, note: "Tragbarer Atomwerfer aus der Fallout-Reihe, angelehnt an die Davy Crockett. Deren 20 t dienen als Annahme." },
-  { name: "Anschlag in Denver", kt: 12, country: "Fiktion", origin: "Roman: Der Anschlag (Tom Clancy)", year: "1991", group: "Nie produziert oder fiktiv", special: true, approx: true, note: "Terroristen zünden eine Bombe, die nur teilweise funktioniert. Angaben zur Sprengkraft schwanken zwischen etwa 11 und 15 kt. In der Verfilmung von 2002 trifft es Baltimore." },
-  { name: "Die Megaton-Bombe", kt: 200, country: "Fiktion", origin: "Spiel: Fallout 3", year: "2008", group: "Nie produziert oder fiktiv", special: true, assumed: true, note: "Nicht explodierte Bombe mitten in der Siedlung Megaton, die der Spieler zünden kann." },
-  { name: "Atombombe im Nahen Osten", kt: 500, country: "Fiktion", origin: "Spiel: Call of Duty 4", year: "2007", group: "Nie produziert oder fiktiv", special: true, assumed: true, note: "Bekannte Szene, in der die Explosion eine Stadt samt Hubschraubern erfasst." },
-  { name: "Angriff auf Sheffield", kt: 1000, country: "Fiktion", origin: "Film: Threads (BBC)", year: "1984", group: "Nie produziert oder fiktiv", special: true, note: "Ein Sprengkopf von 1 Mt trifft Sheffield, Ziel ist das Tinsley-Viadukt. Insgesamt fallen im Film 210 Mt auf Großbritannien." },
-  { name: "Tag des Jüngsten Gerichts", kt: 1000, country: "Fiktion", origin: "Film: Terminator 2", year: "1991", group: "Nie produziert oder fiktiv", special: true, assumed: true, note: "Atomschlag auf Los Angeles in der berühmten Traumsequenz. Angenommen ist ein typischer Sprengkopf jener Zeit." },
-  { name: "Atomangriff auf Moskau", kt: 1000, country: "Fiktion", origin: "Spiel: Metro 2033", year: "2010", group: "Nie produziert oder fiktiv", special: true, assumed: true, note: "Vorgeschichte der Metro-Reihe, die Überlebenden flüchten in die Moskauer U-Bahn. Stellvertretend ein einzelner Sprengkopf." },
-  { name: "Neutronenbombe von Gotham", kt: 8700, country: "Fiktion", origin: "Film: The Dark Knight Rises", year: "2012", group: "Nie produziert oder fiktiv", special: true, approx: true, note: "Im Film mit sechs Meilen Explosionsradius beschrieben. Gerechnet als Radius der mittleren Druckwelle ergeben sich rund 8,7 Mt. Die besondere Wirkung einer Neutronenbombe ist nicht nachgebildet." },
-  /* Fiktive Waffen: origin = Werk und Gattung, z. B. "Film: Terminator 2"; assumed: true, wenn das Werk keine Sprengkraft nennt. */
+  { name: "Trinity (“Gadget”)", kt: 24.8, country: "USA", year: "1945", note: "The world’s first nuclear test, New Mexico. 2021 reassessment; for decades the official figure was 21 kt." },
+  { name: "Little Boy", kt: 15, country: "USA", year: "1945", note: "Uranium bomb dropped on Hiroshima." },
+  { name: "Fat Man", kt: 21, country: "USA", year: "1945", note: "Plutonium bomb dropped on Nagasaki." },
+  { name: "Ivy Mike", kt: 10400, country: "USA", year: "1952", note: "First full-scale test of a hydrogen bomb, Enewetak Atoll. Not a deliverable weapon." },
+  { name: "Castle Bravo", kt: 15000, country: "USA", year: "1954", note: "Largest US test, Bikini Atoll. Came out almost three times stronger than expected." },
+  { name: "Davy Crockett (W54)", kt: 0.02, country: "USA", year: "1961–1971", note: "Smallest nuclear weapon ever deployed, fired from a recoilless gun." },
+  { name: "Starfish Prime", kt: 1400, country: "USA", year: "1962", note: "High-altitude test about 400 km above the Pacific that caused a strong electromagnetic pulse." },
+  { name: "B53", kt: 9000, country: "USA", year: "1962–1997", note: "Gravity bomb, for decades the most powerful weapon in the US arsenal." },
+  { name: "B61-12", kt: 50, country: "USA", year: "current", note: "Gravity bomb with selectable yield, also stationed in Europe (maximum setting)." },
+  { name: "W76-1", kt: 90, country: "USA", year: "current", note: "Warhead of the Trident II submarine-launched missile, the most common US warhead." },
+  { name: "W87", kt: 300, country: "USA", year: "current", note: "Warhead of the land-based Minuteman III ICBM." },
+  { name: "W88", kt: 475, country: "USA", year: "current", note: "Higher-yield warhead for the Trident II." },
+  { name: "B83", kt: 1200, country: "USA", year: "current", note: "Most powerful weapon in today’s US arsenal, a gravity bomb." },
+  // Soviet Union / Russia
+  { name: "RDS-1", group: "Soviet Union / Russia", kt: 22, country: "Soviet Union", year: "1949", note: "First Soviet nuclear test, Semipalatinsk (Kazakhstan)." },
+  { name: "RDS-37", group: "Soviet Union / Russia", kt: 1600, country: "Soviet Union", year: "1955", note: "First Soviet two-stage hydrogen bomb." },
+  { name: "Tsar Bomba (AN602)", vstyle: "tsar", group: "Soviet Union / Russia", kt: 50000, country: "Soviet Union", year: "1961", note: "The most powerful explosion ever created, over Novaya Zemlya." },
+  { name: "R-36M2 (SS-18), single warhead", group: "Soviet Union / Russia", kt: 20000, country: "Soviet Union / Russia", year: "1991", note: "Heavy single warhead of the largest ICBM ever built." },
+  // Other countries
+  { name: "Hurricane", kt: 25, country: "United Kingdom", year: "1952", note: "First British nuclear test, detonated inside a ship off Australia." },
+  { name: "Gerboise Bleue", kt: 70, country: "France", year: "1960", note: "First French test, in the Algerian Sahara." },
+  { name: "TN 75", kt: 100, country: "France", year: "current", note: "Warhead of French submarine-launched missiles." },
+  { name: "Project 596", kt: 22, country: "China", year: "1964", note: "First Chinese nuclear test, Lop Nur." },
+  { name: "Smiling Buddha", kt: 8, country: "India", year: "1974", note: "First Indian test, Pokhran. Officially 12 kt; independent estimates are lower." },
+  { name: "6th nuclear test", kt: 250, country: "North Korea", year: "2017", note: "North Korea’s largest test, Punggye-ri. Estimates range from about 50 to 300 kt." },
+  // Conventional (chemical) explosions, yield in TNT equivalent
+  { name: "Tomahawk cruise missile", kt: 0.0005, type: "conv", smoke: "dark", country: "USA", year: "since 1983", note: "Warhead equivalent to about 500 kg of TNT." },
+  { name: "GBU-43/B MOAB", kt: 0.011, type: "conv", smoke: "dark", country: "USA", year: "2003", note: "“Mother of All Bombs”, the largest conventional bomb in the US arsenal. First used in Afghanistan in 2017." },
+  { name: "ATBIP “Father of All Bombs”", kt: 0.044, type: "conv", smoke: "dark", thermo: true, group: "Soviet Union / Russia", country: "Russia", year: "2007", note: "Thermobaric bomb. The 44 t of TNT is a Russian claim and has not been independently confirmed." },
+  { name: "Port of Tianjin explosion", kt: 0.3, type: "conv", smoke: "dark", approx: true, country: "China", year: "2015", note: "Chemical warehouse, 173 dead. Estimates for the second, larger blast range from 21 t (seismic) to 500 t of TNT." },
+  { name: "Port of Beirut explosion", kt: 1, type: "conv", smoke: "nitrate", country: "Lebanon", year: "2020", note: "About 2,750 t of ammonium nitrate exploded; over 200 dead and more than 6,000 injured. Studies estimate 0.5 to 1.4 kt of TNT." },
+  { name: "Halifax Explosion", kt: 2.9, type: "conv", smoke: "white", country: "Canada", year: "1917", note: "A munitions ship exploded after a collision in the harbour, about 2,000 dead. The largest man-made explosion before the atomic bomb." },
+  { name: "Heligoland “British Bang”", kt: 3.2, type: "conv", smoke: "white", country: "United Kingdom", year: "1947", note: "The Royal Navy blew up about 6,700 t of surplus wartime munitions on the German island." },
+  { name: "Minor Scale", kt: 4, type: "conv", smoke: "white", country: "USA", year: "1985", note: "Largest planned conventional detonation: 4,744 t of ANFO to simulate the blast of a nuclear explosion." },
+  // Planned, never built or never detonated at full yield
+  { name: "Sundial", kt: 1e7, country: "USA", year: "1954", group: "Never built or fictional", special: true, note: "Proposed by Edward Teller, never built. At this size the usual scaling laws break down; the radii are only a rough extrapolation." },
+  { name: "Gnomon", kt: 1e6, country: "USA", year: "1954", group: "Never built or fictional", special: true, note: "Meant to serve as the trigger stage for Sundial. A prototype test was planned for 1956 but never took place. Radii are only a rough extrapolation." },
+  { name: "Tsar Bomba (full yield)", vstyle: "tsar", kt: 100000, country: "Soviet Union", year: "1961", group: "Never built or fictional", special: true, note: "Designed for 100 Mt but detonated at half strength." },
+  { name: "T-15 torpedo", kt: 100000, country: "Soviet Union", year: "1950s", group: "Never built or fictional", special: true, note: "Giant torpedo designed to destroy harbours, cancelled in 1954. The often-cited 100 Mt is disputed; a warhead of a few megatons may have been planned." },
+  // Fiction (films, books, games). approx: derived from the work; assumed: not stated in the work
+  { name: "“Fat Man” mini-nuke", kt: 0.02, country: "Fiction", origin: "Game: Fallout", year: "since 1997", group: "Never built or fictional", special: true, assumed: true, note: "Portable nuke launcher from the Fallout series, inspired by the Davy Crockett, whose 20 t is used here." },
+  { name: "Denver attack", kt: 12, country: "Fiction", origin: "Novel: The Sum of All Fears (Tom Clancy)", year: "1991", group: "Never built or fictional", special: true, approx: true, note: "Terrorists detonate a bomb that only partly works. Yield figures in summaries range from about 11 to 15 kt. In the 2002 film the target is Baltimore." },
+  { name: "The Megaton bomb", kt: 200, country: "Fiction", origin: "Game: Fallout 3", year: "2008", group: "Never built or fictional", special: true, assumed: true, note: "Unexploded bomb in the middle of the town of Megaton that the player can detonate." },
+  { name: "Middle East nuke", kt: 500, country: "Fiction", origin: "Game: Call of Duty 4", year: "2007", group: "Never built or fictional", special: true, assumed: true, note: "Famous scene in which the blast engulfs a city along with the helicopters above it." },
+  { name: "Attack on Sheffield", kt: 1000, country: "Fiction", origin: "Film: Threads (BBC)", year: "1984", group: "Never built or fictional", special: true, note: "A 1 Mt warhead strikes Sheffield, aimed at the Tinsley Viaduct. In total, 210 Mt fall on Britain in the film." },
+  { name: "Judgment Day", kt: 1000, country: "Fiction", origin: "Film: Terminator 2", year: "1991", group: "Never built or fictional", special: true, assumed: true, note: "The nuclear strike on Los Angeles from the famous dream sequence. A typical warhead of the era is assumed." },
+  { name: "Moscow strike", kt: 1000, country: "Fiction", origin: "Game: Metro 2033", year: "2010", group: "Never built or fictional", special: true, assumed: true, note: "Backstory of the Metro series; survivors flee into the Moscow subway. A single warhead stands in for the attack." },
+  { name: "Gotham neutron bomb", kt: 8700, country: "Fiction", origin: "Film: The Dark Knight Rises", year: "2012", group: "Never built or fictional", special: true, approx: true, note: "Described in the film as having a six-mile blast radius. Taken as the moderate blast radius, that works out to about 8.7 Mt. The special effects of a neutron bomb are not modelled." },
 ];
 
 
 
 /* ---------- Zustand und Hilfsfunktionen ---------- */
-const state = { kt: 15, burst: "air", target: [13.4132, 52.5219], detonated: true, boom: null, layer: "map", type: "nuc", smoke: "dark", thermo: false };
+const state = { units: (() => { try { const u = localStorage.getItem("units"); if (u) return u; } catch (e) {} return /^en-(US|LR)|^my\b/i.test(navigator.language || "") ? "imperial" : "metric"; })(), kt: 15, burst: "air", target: [13.4132, 52.5219], detonated: true, boom: null, layer: "map", type: "nuc", smoke: "dark", thermo: false };
 const $ = id => document.getElementById(id);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const nf = (v, d) => v.toLocaleString("de-DE", { maximumFractionDigits: d, minimumFractionDigits: d });
+const nf = (v, d) => v.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: d });
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const clamp01 = v => Math.max(0, Math.min(1, v));
 const easeOut = t => 1 - Math.pow(1 - t, 3);
 
 function fmtYield(kt) {
-  const f = (v, d) => v.toLocaleString("de-DE", { maximumFractionDigits: d });
+  const f = (v, d) => v.toLocaleString("en-US", { maximumFractionDigits: d });
   if (kt >= 1e6) return f(kt / 1e6, 1) + " Gt";
   if (kt >= 1000) return f(kt / 1000, 1) + " Mt";
   if (kt >= 1) return f(kt, 1) + " kt";
   return f(kt * 1000, 0) + " t";
 }
-function fmtKm(r) { return r < 1 ? nf(r * 1000, 0) + " m" : nf(r, r < 10 ? 2 : 1) + " km"; }
-function fmtArea(r) { const a = Math.PI * r * r; return nf(a, a < 1 ? 2 : a < 100 ? 1 : 0) + " km²"; }
+/* Einheiten: metrisch (km, m) oder imperial (mi, ft) */
+function fmtKm(r) {
+  if (state.units === "imperial") {
+    const mi = r * 0.621371;
+    return mi < 0.2 ? nf(Math.round(r * 3280.84 / 10) * 10, 0) + " ft" : nf(mi, mi < 10 ? 2 : 1) + " mi";
+  }
+  return r < 1 ? nf(r * 1000, 0) + " m" : nf(r, r < 10 ? 2 : 1) + " km";
+}
+function fmtArea(r) {
+  let a = Math.PI * r * r, u = " km²";
+  if (state.units === "imperial") { a *= 0.386102; u = " mi²"; }
+  return nf(a, a < 1 ? 2 : a < 100 ? 1 : 0) + u;
+}
 
 /* Punkt in gegebener Entfernung und Richtung (Großkreis) */
 function dest([lon, lat], km, bearingDeg) {
@@ -566,7 +594,8 @@ const map = new maplibregl.Map({
   attributionControl: { compact: false },
   dragRotate: true,
 });
-map.addControl(new maplibregl.ScaleControl({ unit: "metric", maxWidth: 110 }), "bottom-left");
+const scaleCtl = new maplibregl.ScaleControl({ unit: "metric", maxWidth: 110 });
+map.addControl(scaleCtl, "bottom-left");
 map.on("style.load", () => { try { map.setProjection({ type: "globe" }); } catch (e) {} addBuildings(); });
 
 /* ---------- 3D-Gebäude, die je nach Zone einstürzen ----------
@@ -968,15 +997,15 @@ function drawExplosion(now) {
 
   /* Zeitanzeige: echte Zeit seit der Detonation */
   let phase;
-  if (el < 300) phase = b.conv ? "Detonation" : "Lichtblitz: Hitzestrahlung trifft sofort ein";
+  if (el < 300) phase = b.conv ? "Detonation" : "Flash: thermal radiation arrives instantly";
   else if (ts < 1) {
     const passed = Object.keys(BLAST).filter(id => b.fired[id]);
-    phase = passed.length ? EFFECTS.find(e => e.id === passed[passed.length - 1]).name + " durchläuft ihre Zone" : "Feuerball dehnt sich aus, Druckwelle läuft los";
-  } else phase = b.conv ? "Rauchwolke steigt auf" : "Pilzwolke steigt auf";
+    phase = passed.length ? EFFECTS.find(e => e.id === passed[passed.length - 1]).name + " sweeps through its zone" : "Fireball expands, shock wave sets off";
+  } else phase = b.conv ? "Smoke cloud rises" : "Mushroom cloud rises";
   $("tval").textContent = "T + " + fmtSec(Math.max(0.1, tPhysNow));
   $("tphase").textContent = phase;
   if (el > TL.shockStart + TL.shockDur && casResult && !b.shown) { b.shown = true; const keep = state.boom; state.boom = null; showEstimate(); state.boom = keep; }
-  if (el > TL.end) { state.boom = null; bldReach = 1e9; applyBuildings(); $("tphase").textContent = "Druckwelle erreicht 1 psi nach " + fmtSec(b.tPhys.light); if (!b.shown) showEstimate(); }
+  if (el > TL.end) { state.boom = null; bldReach = 1e9; applyBuildings(); $("tphase").textContent = "Shock wave reaches 1 psi after " + fmtSec(b.tPhys.light); if (!b.shown) showEstimate(); }
 }
 
 /* Zar-Bombe: warmes Licht über der ganzen Szene, zwei große Kondensationsringe um den Pilz und
@@ -1199,7 +1228,7 @@ async function estimateCasualties(target, W, burst) {
 function fmtPeople(n) {
   if (n < 1000) return nf(Math.round(n / 10) * 10, 0);
   if (n < 1e6) return nf(Math.round(n / 1000) * 1000, 0);
-  return nf(n / 1e6, n < 1e7 ? 2 : 1) + " Mio.";
+  return nf(n / 1e6, n < 1e7 ? 2 : 1) + " million";
 }
 let casResult = null, casToken = 0;
 function runEstimate() {
@@ -1207,7 +1236,7 @@ function runEstimate() {
   casResult = null;
   $("cas").hidden = false;
   $("casDead").textContent = "…"; $("casInj").textContent = "…";
-  $("casNote").textContent = "Bevölkerungsdaten werden geladen …";
+  $("casNote").textContent = "Loading population data …";
   estimateCasualties(state.target, state.kt, state.burst).then(r => {
     if (token !== casToken) return;
     casResult = r;
@@ -1218,13 +1247,13 @@ function showEstimate() {
   const r = casResult; if (!r || !state.detonated) return;
   if (!r.ok) {
     $("casDead").textContent = "–"; $("casInj").textContent = "–";
-    $("casNote").textContent = "Für diesen Ort liegen keine Bevölkerungsdaten vor (z. B. auf dem Meer).";
+    $("casNote").textContent = "No population data for this location (e.g. at sea).";
   } else {
     const range = (a, b) => fmtPeople(a) === fmtPeople(b) ? fmtPeople(a) : fmtPeople(a) + " – " + fmtPeople(b);
     $("casDead").textContent = range(r.deadLo, r.deadHi);
     $("casInj").textContent = range(r.injLo, r.injHi);
     $("mDead").textContent = range(r.deadLo, r.deadHi); $("mInj").textContent = range(r.injLo, r.injHi); $("mcas").hidden = false;
-    $("casNote").textContent = `${fmtPeople(r.total)} Menschen leben im betroffenen Gebiet. Untere Zahl: nur Druckwelle, obere: ${state.type === "conv" ? "mit Feuerball und Glassplittern" : "mit Hitze und Strahlung. Ohne Fallout"}.`;
+    $("casNote").textContent = `${fmtPeople(r.total)} people live in the affected area. Lower figure: blast only; upper: ${state.type === "conv" ? "including fireball and flying glass" : "including heat and radiation. Fallout not included"}.`;
   }
   render();
 }
@@ -1236,14 +1265,14 @@ function clearDetonation() {
   boomToken++; state.detonated = false; state.boom = null; state.destroy = null; shakes = []; $("stage").style.transform = "";
   bldReach = null; applyBuildings();
   $("timer").classList.remove("show");
-  $("hint").textContent = "„Zünden“ startet die Explosion.";
+  $("hint").textContent = "Press “Detonate” to start the explosion.";
   casToken++; casResult = null; $("cas").hidden = true; $("mcas").hidden = true;
   render();
 }
 function setTarget(ll) {
   state.target = ll;
   clearDetonation();
-  $("hint").textContent = "Ziel gesetzt. „Zünden“ startet die Explosion.";
+  $("hint").textContent = "Target set. Press “Detonate” to start the explosion.";
 }
 function onDown(e) {
   const oe = e.originalEvent;
@@ -1283,7 +1312,7 @@ function detonate() {
   state.destroy = makeDestroy();
   bldReach = reduceMotion ? 1e9 : 0; applyBuildings();
   runEstimate();
-  $("hint").textContent = "Fadenkreuz ziehen oder auf die Karte tippen, um das Ziel zu verschieben";
+  $("hint").textContent = "Drag the crosshair or tap the map to move the target";
   if (!reduceMotion) {
     const conv = state.type === "conv";
     $("flash").style.background = conv ? "#ffb877" : "";
@@ -1306,16 +1335,16 @@ function setYield(kt, fromRange) {
 function render() {
   const list = currentRadii();
   $("summary").innerHTML = state.type === "conv"
-    ? `<b>${fmtYield(state.kt)}</b> TNT · konventionell, bodennah`
+    ? `<b>${fmtYield(state.kt)}</b> TNT · conventional, near ground`
     : state.burst === "air"
-    ? `<b>${fmtYield(state.kt)}</b> · Luft, Höhe ≈ ${fmtKm(burstHeightKm(state.kt))}`
-    : `<b>${fmtYield(state.kt)}</b> · Boden, starker Fallout`;
+    ? `<b>${fmtYield(state.kt)}</b> · airburst at ≈ ${fmtKm(burstHeightKm(state.kt))}`
+    : `<b>${fmtYield(state.kt)}</b> · surface burst, heavy fallout`;
   $("fx").innerHTML = list.slice().reverse().map(e => `
     <li>
       <span class="dot" style="border-color:var(${e.color});background:color-mix(in srgb, var(${e.color}) 35%, transparent)"></span>
       <span class="name">${e.name}${e.unit ? ` <small>${e.unit}</small>` : ""}</span>
-      <span class="num">${fmtKm(e.km)}<small>${fmtArea(e.km)}</small>${casResult && casResult.ok && state.detonated ? `<small class="pop">${fmtPeople(casResult.inZone[e.id])} Einw.</small>` : ""}</span>
-      <span class="desc">${e.desc(state.burst)} ${BLAST[e.id] ? `Die Druckwelle trifft nach ≈ ${fmtSec(shockTime(e.km, state.kt))} ein.` : e.id === "thermal" || e.id === "rad" ? "Wirkt mit dem Lichtblitz, also sofort." : ""}</span>
+      <span class="num">${fmtKm(e.km)}<small>${fmtArea(e.km)}</small>${casResult && casResult.ok && state.detonated ? `<small class="pop">${fmtPeople(casResult.inZone[e.id])} people</small>` : ""}</span>
+      <span class="desc">${e.desc(state.burst)} ${BLAST[e.id] ? `The shock wave arrives after ≈ ${fmtSec(shockTime(e.km, state.kt))}.` : e.id === "thermal" || e.id === "rad" ? "Arrives with the flash, i.e. instantly." : ""}</span>
     </li>`).join("");
   schedule();
 }
@@ -1345,14 +1374,14 @@ let weaponIdx = PRESETS.findIndex(p => p.name === "Little Boy");
   const groups = [];
   PRESETS.forEach((p, i) => { const key = p.group || p.country; let g = groups.find(g => g.c === key); if (!g) groups.push(g = { c: key, items: [] }); g.items.push(i); });
   groups.forEach(g => g.items.sort((a, b) => PRESETS[a].kt - PRESETS[b].kt)); // innerhalb eines Landes nach Sprengkraft
-  $("weapon").innerHTML = `<option value="-1">Eigene Sprengkraft</option>` + groups.map(g =>
+  $("weapon").innerHTML = `<option value="-1">Custom yield</option>` + groups.map(g =>
     `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].special ? (PRESETS[i].origin || PRESETS[i].country) : PRESETS[i].year}) · ${PRESETS[i].assumed || PRESETS[i].approx ? "ca. " : ""}${fmtYield(PRESETS[i].kt)}${PRESETS[i].type === "conv" ? " · konventionell" : ""}</option>`).join("")}</optgroup>`).join("");
 })();
 function syncWeapon() {
   if (weaponIdx >= 0 && Math.abs(PRESETS[weaponIdx].kt - state.kt) > 1e-6) { weaponIdx = -1; state.vstyle = null; }
   $("weapon").value = String(weaponIdx);
   const p = PRESETS[weaponIdx];
-  $("weaponInfo").innerHTML = p ? `<b>${p.origin || p.country}, ${p.year}.</b> ${p.note}` : "Sprengkraft frei gewählt.";
+  $("weaponInfo").innerHTML = p ? `<b>${p.origin || p.country}, ${p.year}.</b> ${p.note}` : "Custom yield.";
 }
 $("weapon").addEventListener("change", e => {
   weaponIdx = +e.target.value;
@@ -1370,7 +1399,7 @@ $("burst").addEventListener("click", e => {
   if (state.detonated || state.boom) clearDetonation(); else render();
 });
 $("go").addEventListener("click", detonate);
-$("reset").addEventListener("click", () => { clearDetonation(); $("hint").textContent = "Auf die Karte tippen oder das Fadenkreuz ziehen, um das Ziel zu setzen"; });
+$("reset").addEventListener("click", () => { clearDetonation(); $("hint").textContent = "Tap the map or drag the crosshair to set the target"; });
 $("replay").addEventListener("click", detonate);
 $("zin").addEventListener("click", () => map.zoomIn());
 $("zout").addEventListener("click", () => map.zoomOut());
@@ -1384,7 +1413,7 @@ $("mute").addEventListener("click", () => {
   muted = !muted;
   const m = $("mute");
   m.classList.toggle("off", muted);
-  m.setAttribute("aria-label", muted ? "Ton an" : "Ton aus");
+  m.setAttribute("aria-label", muted ? "Unmute" : "Mute");
   m.querySelector(".wave").style.display = muted ? "none" : "";
   m.querySelector(".x").style.display = muted ? "" : "none";
 });
@@ -1434,7 +1463,7 @@ $("q").addEventListener("keydown", e => {
   if (e.key === "Enter") pick(hits[active]);
 });
 function showHits() {
-  $("results").innerHTML = hits.map((p, i) => `<button data-i="${i}" class="${i === active ? "active" : ""}"><span>${p[0]}</span><small>${p[1]}${p[4] ? " · " + (p[4] < 1e5 ? "<0,1" : nf(p[4] / 1e6, 1)) + " Mio." : ""}</small></button>`).join("") || `<button disabled><small>Kein Ort gefunden</small></button>`;
+  $("results").innerHTML = hits.map((p, i) => `<button data-i="${i}" class="${i === active ? "active" : ""}"><span>${p[0]}</span><small>${p[1]}${p[4] ? " · " + (p[4] < 1e5 ? "<0.1" : nf(p[4] / 1e6, 1)) + "M" : ""}</small></button>`).join("") || `<button disabled><small>No place found</small></button>`;
   $("results").classList.add("open");
 }
 $("results").addEventListener("click", e => { const b = e.target.closest("button[data-i]"); if (b) pick(hits[+b.dataset.i]); });
@@ -1468,6 +1497,17 @@ $("openSources").addEventListener("click", () => $("sources").showModal());
 $("closeSources").addEventListener("click", () => $("sources").close());
 $("sources").addEventListener("click", e => { if (e.target === $("sources")) $("sources").close(); });
 
+/* Einheiten umschalten */
+function setUnits(u) {
+  state.units = u === "imperial" ? "imperial" : "metric";
+  document.querySelectorAll("#units button").forEach(x => x.classList.toggle("on", x.dataset.v === state.units));
+  try { scaleCtl.setUnit(state.units); } catch (e) {}
+  try { localStorage.setItem("units", state.units); } catch (e) {}
+  render();
+  if (casResult) showEstimate();
+}
+$("units").addEventListener("click", e => { const b = e.target.closest("button"); if (b) setUnits(b.dataset.v); });
+
 /* ---------- Teilen: Szenario steckt in der Adresse ----------
    ?w=waffe&kt=…&t=nuc|conv&b=air|surface&lat=…&lon=…&z=… */
 const slug = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/ß/g, "ss").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -1478,6 +1518,7 @@ function scenarioURL() {
   if (state.type !== "conv") q.set("b", state.burst);
   q.set("lat", state.target[1].toFixed(4)); q.set("lon", state.target[0].toFixed(4));
   q.set("z", map.getZoom().toFixed(1));
+  if (state.units === "imperial") q.set("u", "imp");
   return location.origin + location.pathname + "?" + q.toString();
 }
 function nearestPlace() {
@@ -1494,12 +1535,12 @@ $("share").addEventListener("click", async () => {
   const url = scenarioURL();
   history.replaceState(null, "", url);
   const p = PRESETS[weaponIdx], where = nearestPlace();
-  const text = `${p ? p.name : (state.type === "conv" ? "Explosion" : "Atombombe")} (${fmtYield(state.kt)})${where ? " über " + where : ""}`;
+  const text = `${p ? p.name : (state.type === "conv" ? "Explosion" : "Nuclear bomb")} (${fmtYield(state.kt)})${where ? " over " + where : ""}`;
   if (navigator.share && isPhone()) {
-    try { await navigator.share({ title: "Detonationsradius", text, url }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+    try { await navigator.share({ title: "BlastAtlas", text, url }); return; } catch (e) { if (e && e.name === "AbortError") return; }
   }
-  try { await navigator.clipboard.writeText(url); toast("Link kopiert"); }
-  catch (e) { toast("Link steht jetzt in der Adresszeile"); }
+  try { await navigator.clipboard.writeText(url); toast("Link copied"); }
+  catch (e) { toast("The link is now in the address bar"); }
 });
 function setBurst(v) {
   state.burst = v === "surface" ? "surface" : "air";
@@ -1514,6 +1555,7 @@ function loadScenario() {
   if (idx >= 0) { weaponIdx = idx; const p = PRESETS[idx]; setType(p.type || "nuc", p.smoke, p.thermo, p.vstyle); setYield(p.kt); }
   else { weaponIdx = -1; setType(q.get("t") === "conv" ? "conv" : "nuc"); setYield(parseFloat(q.get("kt")) || 15); }
   setBurst(q.get("b"));
+  if (q.get("u") === "imp") state.units = "imperial";
   const z = parseFloat(q.get("z"));
   return isFinite(z) ? Math.max(1, Math.min(18, z)) : null;
 }
@@ -1529,8 +1571,8 @@ bldReach = 1e9;
 const startZoom = () => (shared && sharedZoom) ? sharedZoom : zoomFor(VIEW.still);
 map.jumpTo({ center: state.target, zoom: startZoom() });
 map.once("load", () => { map.jumpTo({ center: state.target, zoom: startZoom() }); schedule(); });
-render();
-$("hint").textContent = shared ? "Geteiltes Szenario. „Zünden“ spielt die Explosion ab." : "Beispiel: Hiroshima-Bombe über Berlin. „Zünden“ spielt die Explosion ab.";
+setUnits(state.units);
+$("hint").textContent = shared ? "Shared scenario. Press “Detonate” to play the explosion." : "Example: the Hiroshima bomb over Berlin. Press “Detonate” to play the explosion.";
 fetch("data/places.json").then(r => r.json()).then(d => places = d).catch(() => {});
 if (shared) runEstimate();
 </script>
