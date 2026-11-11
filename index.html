@@ -1004,13 +1004,13 @@ let weaponIdx = PRESETS.findIndex(p => p.name === "Little Boy");
   PRESETS.forEach((p, i) => { const key = p.group || p.country; let g = groups.find(g => g.c === key); if (!g) groups.push(g = { c: key, items: [] }); g.items.push(i); });
   groups.forEach(g => g.items.sort((a, b) => PRESETS[a].kt - PRESETS[b].kt)); // innerhalb eines Landes nach Sprengkraft
   $("weapon").innerHTML = `<option value="-1">Eigene Sprengkraft</option>` + groups.map(g =>
-    `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].special ? (PRESETS[i].origin || PRESETS[i].country) : PRESETS[i].year}) · ${PRESETS[i].assumed || PRESETS[i].approx ? "ca. " : ""}${fmtYield(PRESETS[i].kt)}${PRESETS[i].assumed ? " (angenommen)" : ""}${PRESETS[i].type === "conv" ? " · konventionell" : ""}</option>`).join("")}</optgroup>`).join("");
+    `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].special ? (PRESETS[i].origin || PRESETS[i].country) : PRESETS[i].year}) · ${PRESETS[i].assumed || PRESETS[i].approx ? "ca. " : ""}${fmtYield(PRESETS[i].kt)}${PRESETS[i].type === "conv" ? " · konventionell" : ""}</option>`).join("")}</optgroup>`).join("");
 })();
 function syncWeapon() {
   if (weaponIdx >= 0 && Math.abs(PRESETS[weaponIdx].kt - state.kt) > 1e-6) weaponIdx = -1;
   $("weapon").value = String(weaponIdx);
   const p = PRESETS[weaponIdx];
-  $("weaponInfo").innerHTML = p ? `<b>${p.origin || p.country}, ${p.year}.</b> ${p.note}${p.assumed ? " <b>Die Sprengkraft wird im Werk nicht genannt, der Wert ist angenommen.</b>" : p.approx ? " <b>Wert aus Angaben im Werk abgeleitet.</b>" : ""}` : "Sprengkraft frei gewählt.";
+  $("weaponInfo").innerHTML = p ? `<b>${p.origin || p.country}, ${p.year}.</b> ${p.note}` : "Sprengkraft frei gewählt.";
 }
 $("weapon").addEventListener("change", e => {
   weaponIdx = +e.target.value;
