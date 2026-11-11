@@ -488,11 +488,92 @@ function drawFx() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, W, H);
   const now = performance.now();
+  drawDestruction(now);
   drawEffects(now);
   if (state.boom) drawExplosion(now);
   drawTarget();
   applyShake(now);
-  if (state.boom) schedule();
+  if (state.boom || (state.destroy && state.detonated)) schedule();
+}
+
+/* ---------- Zerstörung auf der Karte ----------
+   Verdunkelung, Trümmer, Krater und Brände je Zone. Breitet sich während der Animation mit der
+   Druckwelle aus, Brände entstehen in der Hitzezone (nuklear) bzw. im Feuerball-Umfeld (konventionell). */
+function makeDestroy() {
+  const rad = {}; EFFECTS.forEach(e => rad[e.id] = e.r(state.kt, state.burst));
+  const conv = state.type === "conv";
+  const R = Math.random;
+  const fireR = conv ? rad.moderate : Math.min(rad.thermal, rad.light * 1.1);
+  const fires = [], smoke = [], rubble = [], blotches = [];
+  for (let i = 0; i < 120; i++) fires.push({ r: fireR * Math.pow(R(), 0.75), a: R() * 6.283, s: 0.6 + R() * 0.8, ph: R() * 6.283, f: 3 + R() * 5 });
+  for (let i = 0; i < 22; i++) smoke.push({ i: (R() * fires.length) | 0, ph: R(), s: 0.7 + R() * 0.8 });
+  for (let i = 0; i < 380; i++) rubble.push({ r: rad.moderate * Math.sqrt(R()), a: R() * 6.283, w: 1 + R() * 2.2, h: 1 + R() * 1.6, c: R() });
+  for (let i = 0; i < 46; i++) blotches.push({ r: rad.heavy * 1.6 * Math.sqrt(R()), a: R() * 6.283, s: 0.15 + R() * 0.3 });
+  const crater = conv ? 0.065 * Math.cbrt(state.kt) : state.burst === "surface" ? 0.04 * Math.cbrt(state.kt) : 0;
+  return { rad, conv, fireR, fires, smoke, rubble, blotches, crater };
+}
+function revealRadius(now) {
+  const b = state.boom;
+  if (!b) return Infinity;
+  const el = now - b.t0, ts = clamp01((el - TL.shockStart) / TL.shockDur);
+  if (ts >= 1) return Infinity;
+  return Math.max(b.radii.fireball, shockRadius(ts * b.tMax, b.W));
+}
+function drawDestruction(now) {
+  const d = state.destroy;
+  if (!d || !state.detonated) return;
+  const Rl = revealRadius(now);
+  const el = state.boom ? now - state.boom.t0 : Infinity;
+  const pxkm = pxPerKm(), side = clamp01(map.getPitch() / 60);
+  const disk = (km, rgb, a) => { const r = Math.min(km, Rl); if (r <= 0) return; ctx.beginPath(); ringPath(state.target, r); ctx.fillStyle = `rgba(${rgb},${a})`; ctx.fill(); };
+  // verbrannte Fläche durch die Hitzestrahlung (nuklear, kommt mit dem Lichtblitz)
+  if (!d.conv && el > 150) { ctx.beginPath(); ringPath(state.target, d.rad.thermal); ctx.fillStyle = "rgba(80,36,10,0.2)"; ctx.fill(); }
+  // Verdunkelung nach Druckzonen
+  disk(d.rad.light, "16,13,12", 0.2);
+  disk(d.rad.moderate, "20,15,12", 0.32);
+  disk(d.rad.heavy, "12,9,8", 0.5);
+  // unregelmäßige Brandflecken
+  for (const p of d.blotches) {
+    if (p.r > Rl) continue;
+    const [x, y] = P(offsetLL(state.target, Math.cos(p.a) * p.r, Math.sin(p.a) * p.r));
+    puff(x, y, Math.max(4, p.s * d.rad.heavy * pxkm), "10,8,7", 0.35);
+  }
+  // Trümmer
+  if (d.rad.moderate * pxkm > 40) {
+    for (const p of d.rubble) {
+      if (p.r > Rl) continue;
+      const [x, y] = P(offsetLL(state.target, Math.cos(p.a) * p.r, Math.sin(p.a) * p.r));
+      ctx.fillStyle = p.c < 0.5 ? `rgba(120,110,100,0.55)` : `rgba(60,52,46,0.6)`;
+      ctx.fillRect(x, y, p.w, p.h);
+    }
+  }
+  // Krater
+  if (d.crater > 0 && Rl > d.crater) {
+    ctx.beginPath(); ringPath(state.target, d.crater); ctx.fillStyle = "rgba(8,6,6,0.85)"; ctx.fill();
+    ctx.strokeStyle = "rgba(140,122,104,0.55)"; ctx.lineWidth = 2; ctx.stroke();
+  }
+  // Brände und Rauch
+  const fireOn = d.conv ? true : el > 300;
+  if (!fireOn) return;
+  const t = now / 1000;
+  ctx.globalCompositeOperation = "lighter";
+  for (const f of d.fires) {
+    if (d.conv && f.r > Rl) continue;
+    const [x, y] = P(offsetLL(state.target, Math.cos(f.a) * f.r, Math.sin(f.a) * f.r));
+    const fl = 0.55 + 0.3 * Math.sin(t * f.f + f.ph) + 0.15 * Math.sin(t * f.f * 2.3 + f.ph * 2);
+    const sz = Math.min(26, Math.max(5, d.fireR * 0.035 * f.s * pxkm));
+    puff(x, y, sz * 2.2, "255,110,30", 0.18 * fl);
+    puff(x, y - sz * 0.3 * side, sz, "255,190,90", 0.55 * fl);
+  }
+  ctx.globalCompositeOperation = "source-over";
+  for (const sm of d.smoke) {
+    const f = d.fires[sm.i]; if (d.conv && f.r > Rl) continue;
+    const ph = (t * 0.12 + sm.ph) % 1;
+    const drift = d.fireR * 0.12 * ph;
+    const [x, y] = P(offsetLL(state.target, Math.cos(f.a) * f.r + drift, Math.sin(f.a) * f.r + drift * 0.3));
+    const sz = Math.min(60, Math.max(5, d.fireR * 0.05 * sm.s * pxkm)) * (0.6 + ph);
+    puff(x, y - ph * sz * 3 * side, sz, "38,34,32", 0.32 * (1 - ph) * Math.min(1, ph * 5));
+  }
 }
 
 /* Zeitplan der Animation in Millisekunden (zusammengerafft, die Anzeige zeigt die echte Zeit) */
@@ -514,7 +595,8 @@ function drawEffects(now) {
     if (a <= 0) continue;
     const col = css(e.color);
     ctx.beginPath(); ringPath(state.target, e.km);
-    ctx.globalAlpha = a * ((e.id === "fireball" ? 0.55 : 0.16) + extra); ctx.fillStyle = col; ctx.fill();
+    const base = state.destroy ? (e.id === "fireball" ? 0.22 : 0.08) : (e.id === "fireball" ? 0.55 : 0.16); // mit Zerstörung dezenter, damit sie sichtbar bleibt
+    ctx.globalAlpha = a * (base + extra); ctx.fillStyle = col; ctx.fill();
     ctx.globalAlpha = a * 0.95; ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.stroke();
     ctx.globalAlpha = 1;
   }
@@ -897,7 +979,7 @@ function showEstimate() {
 let dragging = false, justDragged = 0;
 function nearTarget(pt) { if (!state.target) return false; const [x, y] = P(state.target); return Math.hypot(pt.x - x, pt.y - y) < 30; }
 function clearDetonation() {
-  boomToken++; state.detonated = false; state.boom = null; shakes = []; $("stage").style.transform = "";
+  boomToken++; state.detonated = false; state.boom = null; state.destroy = null; shakes = []; $("stage").style.transform = "";
   $("timer").classList.remove("show");
   $("hint").textContent = "„Zünden“ startet die Explosion.";
   casToken++; casResult = null; $("cas").hidden = true;
@@ -941,6 +1023,7 @@ function detonate() {
   ++boomToken;
   state.boom = null;
   state.detonated = true;
+  state.destroy = makeDestroy();
   runEstimate();
   $("hint").textContent = "Fadenkreuz ziehen oder auf die Karte tippen, um das Ziel zu verschieben";
   if (!reduceMotion) {
@@ -1103,6 +1186,7 @@ $("legendToggle").addEventListener("click", () => {
 resizeFx();
 window.addEventListener("resize", resizeFx);
 setYield(15);
+state.destroy = makeDestroy();
 map.jumpTo({ center: state.target, zoom: zoomFor(VIEW.still) });
 map.once("load", () => { map.jumpTo({ center: state.target, zoom: zoomFor(VIEW.still) }); schedule(); });
 $("hint").textContent = "Beispiel: Hiroshima-Bombe über Berlin. „Zünden“ spielt die Explosion ab.";
