@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /data/pop/
 
-Sitemap: https://blastatlas.com/sitemap.xml
+Sitemap: https://blastsimulator.com/sitemap.xml
