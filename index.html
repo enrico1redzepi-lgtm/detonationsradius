@@ -348,6 +348,15 @@ const PRESETS = [
   { name: "Gnomon", kt: 1e6, country: "USA", year: "1954", group: "Nie produziert oder fiktiv", special: true, note: "Sollte als Zündstufe für Sundial dienen. Ein Prototyp-Test war für 1956 geplant, fand aber nie statt. Radien nur grobe Hochrechnung." },
   { name: "Zar-Bombe in voller Stärke", kt: 100000, country: "Sowjetunion", year: "1961", group: "Nie produziert oder fiktiv", special: true, note: "Ausgelegt auf 100 Mt, gezündet wurde aber nur die halbe Stärke." },
   { name: "T-15-Torpedo", kt: 100000, country: "Sowjetunion", year: "1950er", group: "Nie produziert oder fiktiv", special: true, note: "Riesentorpedo gegen Häfen, 1954 eingestellt. Die oft genannten 100 Mt sind umstritten, möglicherweise war nur ein Sprengkopf von wenigen Megatonnen vorgesehen." },
+  // Fiktiv (Filme, Bücher, Spiele). approx: aus dem Werk abgeleitet; assumed: im Werk nicht genannt
+  { name: "Mini-Atombombe „Fat Man“", kt: 0.02, country: "Fiktion", origin: "Spiel: Fallout", year: "ab 1997", group: "Nie produziert oder fiktiv", special: true, assumed: true, note: "Tragbarer Atomwerfer aus der Fallout-Reihe, angelehnt an die Davy Crockett. Deren 20 t dienen als Annahme." },
+  { name: "Anschlag in Denver", kt: 12, country: "Fiktion", origin: "Roman: Der Anschlag (Tom Clancy)", year: "1991", group: "Nie produziert oder fiktiv", special: true, approx: true, note: "Terroristen zünden eine Bombe, die nur teilweise funktioniert. Angaben zur Sprengkraft schwanken zwischen etwa 11 und 15 kt. In der Verfilmung von 2002 trifft es Baltimore." },
+  { name: "Die Megaton-Bombe", kt: 200, country: "Fiktion", origin: "Spiel: Fallout 3", year: "2008", group: "Nie produziert oder fiktiv", special: true, assumed: true, note: "Nicht explodierte Bombe mitten in der Siedlung Megaton, die der Spieler zünden kann." },
+  { name: "Atombombe im Nahen Osten", kt: 500, country: "Fiktion", origin: "Spiel: Call of Duty 4", year: "2007", group: "Nie produziert oder fiktiv", special: true, assumed: true, note: "Bekannte Szene, in der die Explosion eine Stadt samt Hubschraubern erfasst." },
+  { name: "Angriff auf Sheffield", kt: 1000, country: "Fiktion", origin: "Film: Threads (BBC)", year: "1984", group: "Nie produziert oder fiktiv", special: true, note: "Ein Sprengkopf von 1 Mt trifft Sheffield, Ziel ist das Tinsley-Viadukt. Insgesamt fallen im Film 210 Mt auf Großbritannien." },
+  { name: "Tag des Jüngsten Gerichts", kt: 1000, country: "Fiktion", origin: "Film: Terminator 2", year: "1991", group: "Nie produziert oder fiktiv", special: true, assumed: true, note: "Atomschlag auf Los Angeles in der berühmten Traumsequenz. Angenommen ist ein typischer Sprengkopf jener Zeit." },
+  { name: "Atomangriff auf Moskau", kt: 1000, country: "Fiktion", origin: "Spiel: Metro 2033", year: "2010", group: "Nie produziert oder fiktiv", special: true, assumed: true, note: "Vorgeschichte der Metro-Reihe, die Überlebenden flüchten in die Moskauer U-Bahn. Stellvertretend ein einzelner Sprengkopf." },
+  { name: "Neutronenbombe von Gotham", kt: 8700, country: "Fiktion", origin: "Film: The Dark Knight Rises", year: "2012", group: "Nie produziert oder fiktiv", special: true, approx: true, note: "Im Film mit sechs Meilen Explosionsradius beschrieben. Gerechnet als Radius der mittleren Druckwelle ergeben sich rund 8,7 Mt. Die besondere Wirkung einer Neutronenbombe ist nicht nachgebildet." },
   /* Fiktive Waffen: origin = Werk und Gattung, z. B. "Film: Terminator 2"; assumed: true, wenn das Werk keine Sprengkraft nennt. */
 ];
 
@@ -866,13 +875,13 @@ let weaponIdx = PRESETS.findIndex(p => p.name === "Little Boy");
   PRESETS.forEach((p, i) => { const key = p.group || p.country; let g = groups.find(g => g.c === key); if (!g) groups.push(g = { c: key, items: [] }); g.items.push(i); });
   groups.forEach(g => g.items.sort((a, b) => PRESETS[a].kt - PRESETS[b].kt)); // innerhalb eines Landes nach Sprengkraft
   $("weapon").innerHTML = `<option value="-1">Eigene Sprengkraft</option>` + groups.map(g =>
-    `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].special ? (PRESETS[i].origin || PRESETS[i].country) : PRESETS[i].year}) · ${PRESETS[i].assumed ? "ca. " : ""}${fmtYield(PRESETS[i].kt)}${PRESETS[i].assumed ? " (angenommen)" : ""}</option>`).join("")}</optgroup>`).join("");
+    `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].special ? (PRESETS[i].origin || PRESETS[i].country) : PRESETS[i].year}) · ${PRESETS[i].assumed || PRESETS[i].approx ? "ca. " : ""}${fmtYield(PRESETS[i].kt)}${PRESETS[i].assumed ? " (angenommen)" : ""}</option>`).join("")}</optgroup>`).join("");
 })();
 function syncWeapon() {
   if (weaponIdx >= 0 && Math.abs(PRESETS[weaponIdx].kt - state.kt) > 1e-6) weaponIdx = -1;
   $("weapon").value = String(weaponIdx);
   const p = PRESETS[weaponIdx];
-  $("weaponInfo").innerHTML = p ? `<b>${p.country}, ${p.year}.</b> ${p.note}${p.assumed ? " <b>Die Sprengkraft wird im Werk nicht genannt, der Wert ist angenommen.</b>" : ""}` : "Sprengkraft frei gewählt.";
+  $("weaponInfo").innerHTML = p ? `<b>${p.origin || p.country}, ${p.year}.</b> ${p.note}${p.assumed ? " <b>Die Sprengkraft wird im Werk nicht genannt, der Wert ist angenommen.</b>" : p.approx ? " <b>Wert aus Angaben im Werk abgeleitet.</b>" : ""}` : "Sprengkraft frei gewählt.";
 }
 $("weapon").addEventListener("change", e => {
   weaponIdx = +e.target.value;
