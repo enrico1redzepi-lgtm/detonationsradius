@@ -380,7 +380,7 @@ const PRESETS = [
   // Sowjetunion / Russland
   { name: "RDS-1", group: "Sowjetunion / Russland", kt: 22, country: "Sowjetunion", year: "1949", note: "Erster sowjetischer Kernwaffentest, Semipalatinsk (Kasachstan)." },
   { name: "RDS-37", group: "Sowjetunion / Russland", kt: 1600, country: "Sowjetunion", year: "1955", note: "Erste sowjetische zweistufige Wasserstoffbombe." },
-  { name: "Zar-Bombe (AN602)", group: "Sowjetunion / Russland", kt: 50000, country: "Sowjetunion", year: "1961", note: "Stärkste je gezündete Explosion, über Nowaja Semlja." },
+  { name: "Zar-Bombe (AN602)", vstyle: "tsar", group: "Sowjetunion / Russland", kt: 50000, country: "Sowjetunion", year: "1961", note: "Stärkste je gezündete Explosion, über Nowaja Semlja." },
   { name: "R-36M2 (SS-18), Einzelsprengkopf", group: "Sowjetunion / Russland", kt: 20000, country: "Sowjetunion / Russland", year: "1991", note: "Schwerer Einzelsprengkopf der größten Interkontinentalrakete." },
   // Weitere Staaten
   { name: "Hurricane", kt: 25, country: "Großbritannien", year: "1952", note: "Erster britischer Kernwaffentest, in einem Schiff vor Australien gezündet." },
@@ -401,7 +401,7 @@ const PRESETS = [
   // Geplant, nie gebaut oder nie in voller Stärke gezündet
   { name: "Sundial", kt: 1e7, country: "USA", year: "1954", group: "Nie produziert oder fiktiv", special: true, note: "Entwurf von Edward Teller, nie gebaut. Bei dieser Größe gelten die üblichen Skalierungsgesetze nicht mehr, die Radien sind nur eine grobe Hochrechnung." },
   { name: "Gnomon", kt: 1e6, country: "USA", year: "1954", group: "Nie produziert oder fiktiv", special: true, note: "Sollte als Zündstufe für Sundial dienen. Ein Prototyp-Test war für 1956 geplant, fand aber nie statt. Radien nur grobe Hochrechnung." },
-  { name: "Zar-Bombe in voller Stärke", kt: 100000, country: "Sowjetunion", year: "1961", group: "Nie produziert oder fiktiv", special: true, note: "Ausgelegt auf 100 Mt, gezündet wurde aber nur die halbe Stärke." },
+  { name: "Zar-Bombe in voller Stärke", vstyle: "tsar", kt: 100000, country: "Sowjetunion", year: "1961", group: "Nie produziert oder fiktiv", special: true, note: "Ausgelegt auf 100 Mt, gezündet wurde aber nur die halbe Stärke." },
   { name: "T-15-Torpedo", kt: 100000, country: "Sowjetunion", year: "1950er", group: "Nie produziert oder fiktiv", special: true, note: "Riesentorpedo gegen Häfen, 1954 eingestellt. Die oft genannten 100 Mt sind umstritten, möglicherweise war nur ein Sprengkopf von wenigen Megatonnen vorgesehen." },
   // Fiktiv (Filme, Bücher, Spiele). approx: aus dem Werk abgeleitet; assumed: im Werk nicht genannt
   { name: "Mini-Atombombe „Fat Man“", kt: 0.02, country: "Fiktion", origin: "Spiel: Fallout", year: "ab 1997", group: "Nie produziert oder fiktiv", special: true, assumed: true, note: "Tragbarer Atomwerfer aus der Fallout-Reihe, angelehnt an die Davy Crockett. Deren 20 t dienen als Annahme." },
@@ -575,8 +575,9 @@ function makeDestroy() {
   const R = Math.random;
   const fireR = conv ? rad.moderate : Math.min(rad.thermal, rad.light * 1.1);
   const fires = [], smoke = [], rubble = [], blotches = [];
-  for (let i = 0; i < 90; i++) fires.push({ r: fireR * Math.pow(R(), 0.75), a: R() * 6.283, s: 0.6 + R() * 0.8, ph: R() * 6.283, f: 3 + R() * 5 });
-  for (let i = 0; i < 22; i++) smoke.push({ i: (R() * fires.length) | 0, ph: R(), s: 0.7 + R() * 0.8 });
+  // Brandherde als Gruppen (Häuserblocks), zur Mitte hin dichter und größer
+  for (let i = 0; i < 38; i++) { const u = Math.pow(R(), 0.8); fires.push({ r: fireR * u, a: R() * 6.283, s: (1.25 - 0.6 * u) * (0.7 + R() * 0.6), ph: R() * 100, f: 3 + R() * 4 }); }
+  for (let i = 0; i < 14; i++) smoke.push({ i: (R() * fires.length) | 0, ph: R(), s: 0.8 + R() * 0.8 });
   for (let i = 0; i < 380; i++) rubble.push({ r: rad.moderate * Math.sqrt(R()), a: R() * 6.283, w: 1 + R() * 2.2, h: 1 + R() * 1.6, c: R() });
   for (let i = 0; i < 46; i++) blotches.push({ r: rad.heavy * 1.6 * Math.sqrt(R()), a: R() * 6.283, s: 0.15 + R() * 0.3 });
   const crater = conv ? 0.065 * Math.cbrt(state.kt) : state.burst === "surface" ? 0.04 * Math.cbrt(state.kt) : 0;
@@ -622,62 +623,65 @@ function drawDestruction(now) {
     ctx.beginPath(); ringPath(state.target, d.crater); ctx.fillStyle = "rgba(8,6,6,0.85)"; ctx.fill();
     ctx.strokeStyle = "rgba(140,122,104,0.55)"; ctx.lineWidth = 2; ctx.stroke();
   }
-  // Brände und Rauch
+  // Brände und Rauch: jeder Brandherd stößt laufend Flammenpartikel aus, die aufsteigen,
+  // von gelb-weiß über orange zu dunkelrot abkühlen und in Rauch übergehen.
   const fireOn = d.conv ? true : el > 300;
   if (!fireOn) return;
   const t = now / 1000;
-  // Rauch zuerst, damit die Flammen davor leuchten: mehrere Schwaden pro Quelle, vom Wind verweht
+  const lift = 0.35 + 0.9 * side;                      // Draufsicht: flach, 3D: Flammen stehen hoch
+  const hash = n => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
+  const pos = f => P(offsetLL(state.target, Math.cos(f.a) * f.r, Math.sin(f.a) * f.r));
+  // Rauchsäulen hinter den Flammen, vom Wind nach Osten verweht
   for (const sm of d.smoke) {
     const f = d.fires[sm.i]; if (d.conv && f.r > Rl) continue;
-    const [fx, fy] = P(offsetLL(state.target, Math.cos(f.a) * f.r, Math.sin(f.a) * f.r));
-    const base = Math.min(40, Math.max(6, d.fireR * 0.03 * sm.s * pxkm));
-    for (let k = 0; k < 4; k++) {
-      const ph = (t * 0.09 + sm.ph + k / 4) % 1;
-      const dx = base * (1.5 + 6 * ph), dy = base * 0.6 * ph;
-      const up = base * 7 * ph * side;
-      puff(fx + dx, fy + dy - up, base * (0.7 + 1.8 * ph), ph < 0.25 ? "52,44,40" : "34,31,30", 0.3 * (1 - ph) * Math.min(1, ph * 6));
+    const [fx, fy] = pos(f);
+    const base = Math.min(46, Math.max(8, d.fireR * 0.045 * sm.s * pxkm));
+    for (let k = 0; k < 6; k++) {
+      const ph = (t * 0.07 + sm.ph + k / 6) % 1;
+      const x = fx + base * (0.5 + 7 * ph * ph), y = fy + base * 0.8 * ph - base * 8 * ph * side;
+      puff(x, y, base * (0.6 + 2.2 * ph), ph < 0.2 ? "62,48,40" : "30,28,28", 0.34 * (1 - ph) * Math.min(1, ph * 8));
     }
   }
-  // Flammen: mehrere züngelnde Flammen je Brandherd, unten gelb-weiß, oben dunkelrot
-  ctx.globalCompositeOperation = "lighter";
-  const lift = 0.45 + 0.85 * side;                     // in der Draufsicht kurze, in 3D hohe Flammen
   for (const f of d.fires) {
     if (d.conv && f.r > Rl) continue;
-    const [x, y] = P(offsetLL(state.target, Math.cos(f.a) * f.r, Math.sin(f.a) * f.r));
-    const sz = Math.min(12, Math.max(4, d.fireR * 0.02 * f.s * pxkm));
-    puff(x, y, sz * 1.6, "255,90,20", 0.13 + 0.05 * Math.sin(t * f.f + f.ph));       // Glut am Boden
-    const n = 3 + (f.f | 0) % 3;
-    for (let j = 0; j < n; j++) {
-      const flick = 0.75 + 0.25 * Math.sin(t * (f.f * 1.7 + j) + f.ph * 3 + j) + 0.12 * Math.sin(t * 13.1 + j * 2.1 + f.ph);
-      const w = sz * (0.32 + 0.08 * ((j * 7) % 3));
-      const h = sz * (1.1 + 0.6 * ((j * 5) % 3) / 2) * flick * lift;
-      const bx = x + (j - (n - 1) / 2) * sz * 0.38, by = y + ((j * 3) % 2) * sz * 0.15;
-      const sway = Math.sin(t * (3 + j) + f.ph + j) * w * 0.7;
-      const g = ctx.createLinearGradient(bx, by, bx, by - h);
-      g.addColorStop(0, "rgba(255,236,170,0.85)");
-      g.addColorStop(0.3, "rgba(255,165,40,0.75)");
-      g.addColorStop(0.7, "rgba(215,60,12,0.45)");
-      g.addColorStop(1, "rgba(120,20,0,0)");
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.moveTo(bx - w, by);
-      ctx.quadraticCurveTo(bx - w * 1.05, by - h * 0.45, bx + sway, by - h);
-      ctx.quadraticCurveTo(bx + w * 1.05, by - h * 0.45, bx + w, by);
-      ctx.closePath(); ctx.fill();
+    const [x, y] = pos(f);
+    const sz = Math.min(15, Math.max(4.5, d.fireR * 0.026 * f.s * pxkm));
+    const cr = sz * 1.3;                                 // Ausdehnung des Brandherds
+    ctx.globalCompositeOperation = "lighter";
+    puff(x, y, cr * 1.8, "255,70,10", 0.08 + 0.04 * Math.sin(t * f.f + f.ph));     // Glut auf dem Boden
+    const n = 20;
+    for (let k = 0; k < n; k++) {
+      const seed = f.ph * 7.1 + k * 1.37;
+      const period = 0.9 + hash(seed) * 0.8;
+      const ph = (t / period + k / n + hash(seed + 3)) % 1;
+      const ox = (hash(seed + 1) - 0.5) * 2 * cr, oy = (hash(seed + 2) - 0.5) * cr;
+      const turb = Math.sin(t * 6 + seed * 3) * sz * 0.25 * ph;
+      const px = x + ox + turb + ph * sz * 0.5;           // leichter Wind
+      const py = y + oy - ph * sz * 4.2 * lift;
+      const r = sz * (0.55 - 0.35 * ph) * (0.6 + hash(seed + 4) * 0.7);
+      if (ph < 0.78) {
+        const c = ph < 0.12 ? "255,214,120" : ph < 0.4 ? "255,140,30" : ph < 0.6 ? "235,85,15" : "170,40,10";
+        puff(px, py, r, c, 0.7 * Math.pow(1 - ph, 0.7));
+      } else {
+        ctx.globalCompositeOperation = "source-over";
+        puff(px, py, r * 2.2, "34,30,29", 0.45 * (1 - ph) / 0.22);
+        ctx.globalCompositeOperation = "lighter";
+      }
     }
-    // aufsteigende Funken
-    for (let k = 0; k < 2; k++) {
-      const ph = (t * (0.6 + 0.2 * k) + f.ph + k * 0.5) % 1;
-      const ex = x + Math.sin(f.ph * 7 + k * 3 + ph * 4) * sz * 0.8, ey = y - ph * sz * 3.2 * lift;
-      ctx.fillStyle = `rgba(255,${Math.round(200 - 120 * ph)},60,${0.9 * (1 - ph)})`;
-      ctx.fillRect(ex, ey, 1.6, 1.6);
+    // Funken
+    for (let k = 0; k < 3; k++) {
+      const ph = (t * (0.5 + 0.15 * k) + hash(f.ph + k)) % 1;
+      const ex = x + Math.sin(f.ph + k * 2 + ph * 5) * cr, ey = y - ph * sz * 5 * lift;
+      ctx.fillStyle = `rgba(255,${Math.round(210 - 130 * ph)},70,${0.9 * (1 - ph)})`;
+      ctx.fillRect(ex, ey, 1.5, 1.5);
     }
+    ctx.globalCompositeOperation = "source-over";
   }
-  ctx.globalCompositeOperation = "source-over";
 }
 
 /* Zeitplan der Animation in Millisekunden (zusammengerafft, die Anzeige zeigt die echte Zeit) */
 const TL_NUC = { shockStart: 250, shockDur: 3800, cloudStart: 450, cloudGrow: 4600, fadeStart: 6600, end: 9200, fireZone: 3800, rise: 1.7 };
+const TL_TSAR = { shockStart: 250, shockDur: 4200, cloudStart: 400, cloudGrow: 5600, fadeStart: 8400, end: 11500, fireZone: 4200, rise: 1.6 };
 const TL_CONV = { shockStart: 120, shockDur: 2600, cloudStart: 200, cloudGrow: 3400, fadeStart: 5200, end: 7600, fireZone: 1600, rise: 1.25 };
 let TL = TL_NUC;
 
@@ -704,7 +708,8 @@ function drawEffects(now) {
 
 function startBoom() {
   const conv = state.type === "conv";
-  TL = conv ? TL_CONV : TL_NUC;
+  const tsar = !conv && state.vstyle === "tsar";
+  TL = conv ? TL_CONV : tsar ? TL_TSAR : TL_NUC;
   const W0 = state.kt, radii = {};
   EFFECTS.forEach(e => radii[e.id] = e.r(W0, state.burst));
   const rFront = Math.max(...Object.keys(BLAST).map(id => radii[id])) * 1.04;
@@ -719,9 +724,10 @@ function startBoom() {
   const debris = [];
   if (conv) for (let i = 0; i < 110; i++) debris.push({ a: R() * 6.283, v: 0.35 + R() * 0.9, up: 0.3 + R() * 0.9, s: 1 + R() * 2.2, hot: R() < 0.55 });
   const dust = [];
-  if (state.burst === "surface" || conv) for (let i = 0; i < 70; i++) dust.push({ a: Math.random() * 6.283, d: 0.9 + Math.random() * 0.7, s: 0.2 + Math.random() * 0.25, sh: Math.random() });
+  if (state.burst === "surface" || conv || tsar) for (let i = 0; i < 70; i++) dust.push({ a: Math.random() * 6.283, d: 0.9 + Math.random() * 0.7, s: 0.2 + Math.random() * 0.25, sh: Math.random() });
   state.boom = { t0: performance.now(), W: W0, radii, rFront, tMax, hitAt, tPhys, fired: {}, parts, dust, debris, conv,
-                 smoke: conv ? state.smoke : "nuc", thermo: conv && state.thermo,
+                 smoke: conv ? state.smoke : tsar ? "tsar" : "nuc", thermo: conv && state.thermo, tsar,
+                 grain: tsar ? Array.from({ length: 260 }, () => ({ a: R() * 6.283, r: Math.sqrt(R()), s: 0.05 + R() * 0.09, c: R(), ph: R() * 6.283 })) : null,
                  rCloud: conv ? cloudRadiusConvKm(W0) : cloudRadiusKm(W0) * (state.burst === "surface" ? 0.85 : 1) };
   // Kamera: nie hineinzoomen, nur herausfahren, wenn man näher dran ist als die Gesamtansicht
   let zWide = zoomFor(conv ? VIEW.still : VIEW.wide);
@@ -777,7 +783,7 @@ function drawExplosion(now) {
     for (const d of b.dust) {
       const ang = d.a + cp * 0.2, dist = d.d * Rk * (0.4 + 0.6 * cp);
       const [x, y] = P(offsetLL(state.target, Math.cos(ang) * dist, Math.sin(ang) * dist));
-      puff(x, y, d.s * Rk * pxkm, `${120 - d.sh * 30 | 0},${102 - d.sh * 25 | 0},${80 - d.sh * 20 | 0}`, 0.16 * cA);
+      puff(x, y, d.s * Rk * pxkm, b.tsar ? `${225 - d.sh * 40 | 0},${140 - d.sh * 30 | 0},${70 - d.sh * 20 | 0}` : `${120 - d.sh * 30 | 0},${102 - d.sh * 25 | 0},${80 - d.sh * 20 | 0}`, (b.tsar ? 0.3 : 0.16) * cA);
     }
   }
 
@@ -790,7 +796,7 @@ function drawExplosion(now) {
     const rx = sCap * (0.35 + 0.65 * cp), ry = rx * (1 - 0.5 * side);
     const capY = cy - rise;
     // Rauchfarbe: heiß orange -> Endfarbe je nach Art der Explosion, unten etwas dunkler
-    const END = { nuc: [214, 207, 198], dark: [58, 54, 52], nitrate: [176, 96, 58], white: [222, 220, 216] }[b.smoke] || [214, 207, 198];
+    const END = { nuc: [214, 207, 198], dark: [58, 54, 52], nitrate: [176, 96, 58], white: [222, 220, 216], tsar: [214, 128, 70] }[b.smoke] || [214, 207, 198];
     const col = (sh, lift) => {
       const k = (1 - sh * (b.smoke === "dark" ? 0.35 : 0.18)) * (0.88 + 0.12 * lift);
       return `${Math.round((255 * heat + END[0] * (1 - heat)) * k)},${Math.round((165 * heat + END[1] * (1 - heat)) * k)},${Math.round((90 * heat + END[2] * (1 - heat)) * k)}`;
@@ -837,10 +843,12 @@ function drawExplosion(now) {
     }
   }
 
+  if (b.tsar) drawTsarExtras(cx, cy, el, pxkm, side, sCap, cp, cA, b);
+
   /* Feuerball und Lichtblitz (steigt mit dem Pilz auf) */
   const fy = cy - (b.rise || 0) * clamp01((el - 500) / 1500);
   if (b.conv) drawConvFireball(cx, fy, el, pxkm, b);
-  const life = b.conv ? 0 : el < 600 ? 1 : clamp01(1 - (el - 600) / 3200);
+  const life = b.conv ? 0 : el < 600 ? 1 : clamp01(1 - (el - 600) / (b.tsar ? 5200 : 3200));
   if (life > 0) {
     const R0 = b.radii.fireball * pxkm;
     const r = Math.max(5, R0 * (el < 450 ? easeOut(el / 450) : 1 + 0.3 * clamp01((el - 450) / 3000)));
@@ -874,6 +882,45 @@ function drawExplosion(now) {
   $("tphase").textContent = phase;
   if (el > TL.shockStart + TL.shockDur && casResult && !b.shown) { b.shown = true; const keep = state.boom; state.boom = null; showEstimate(); state.boom = keep; }
   if (el > TL.end) { state.boom = null; bldReach = 1e9; applyBuildings(); $("tphase").textContent = "Druckwelle erreicht 1 psi nach " + fmtSec(b.tPhys.light); if (!b.shown) showEstimate(); }
+}
+
+/* Zar-Bombe: warmes Licht über der ganzen Szene, zwei große Kondensationsringe um den Pilz und
+   ein körnig glühender Feuerball-Dom, nach den Originalaufnahmen von 1961. */
+function drawTsarExtras(cx, cy, el, pxkm, side, sCap, cp, cA, b) {
+  // warmer Schein über der Szene
+  const sky = clamp01(el / 400) * (1 - clamp01((el - TL.fadeStart) / (TL.end - TL.fadeStart)));
+  if (sky > 0) { ctx.fillStyle = `rgba(110,52,18,${0.22 * sky})`; ctx.fillRect(0, 0, W, H); }
+  const rx = sCap * (0.35 + 0.65 * cp), capY = cy - sCap * TL.rise * cp * side;
+  // Kondensationsringe: abgeflachte Ringe, innen offen
+  const rA = clamp01((el - TL.shockStart - 500) / 900) * (1 - clamp01((el - TL.fadeStart) / (TL.end - TL.fadeStart)));
+  if (rA > 0) {
+    const rings = [{ y: capY + rx * 0.35 * side, r: 1.55, w: 0.42 }, { y: capY - rx * 0.95 * side, r: 1.15, w: 0.36 }];
+    for (const g of rings) {
+      const R = rx * g.r * (0.85 + 0.15 * cp), flat = 1 - 0.74 * side;
+      ctx.save(); ctx.translate(cx, g.y); ctx.scale(1, flat);
+      const gr = ctx.createRadialGradient(0, 0, R * (1 - g.w), 0, 0, R);
+      gr.addColorStop(0, "rgba(250,200,150,0)");
+      gr.addColorStop(0.35, `rgba(250,196,146,${0.62 * rA})`);
+      gr.addColorStop(0.7, `rgba(236,160,104,${0.5 * rA})`);
+      gr.addColorStop(1, "rgba(220,140,90,0)");
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, R, 0, 6.283); ctx.fill();
+      ctx.restore();
+    }
+  }
+  // körniger, glühender Dom
+  const glow = clamp01(1 - (el - 900) / 6000);
+  if (glow > 0 && cA > 0) {
+    const fy = capY, dr = rx * 0.85;
+    ctx.globalCompositeOperation = "lighter";
+    puff(cx, fy, dr * 1.15, "255,214,150", 0.55 * glow);
+    for (const g of b.grain) {
+      const yy = side > 0.2 ? -Math.abs(Math.sin(g.a)) * g.r * dr * 0.9 + dr * 0.25 : Math.sin(g.a) * g.r * dr;
+      const x = cx + Math.cos(g.a) * g.r * dr, y = fy + yy;
+      const tw = 0.7 + 0.3 * Math.sin(el * 0.004 + g.ph);
+      puff(x, y, Math.max(2, g.s * dr), g.c < 0.5 ? "255,236,190" : "236,130,46", (g.c < 0.5 ? 0.35 : 0.3) * glow * tw);
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
 }
 
 /* Feuerball einer chemischen Explosion: kurz, orange-gelb, unruhig, geht schnell in Rauch über */
@@ -1166,7 +1213,8 @@ function render() {
 }
 
 /* Art der Explosion: nuklear oder konventionell (chemisch) */
-function setType(t, smoke, thermo) {
+function setType(t, smoke, thermo, vstyle) {
+  state.vstyle = vstyle || null;
   state.type = t;
   state.smoke = smoke || "dark";
   state.thermo = !!thermo;
@@ -1193,14 +1241,14 @@ let weaponIdx = PRESETS.findIndex(p => p.name === "Little Boy");
     `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].special ? (PRESETS[i].origin || PRESETS[i].country) : PRESETS[i].year}) · ${PRESETS[i].assumed || PRESETS[i].approx ? "ca. " : ""}${fmtYield(PRESETS[i].kt)}${PRESETS[i].type === "conv" ? " · konventionell" : ""}</option>`).join("")}</optgroup>`).join("");
 })();
 function syncWeapon() {
-  if (weaponIdx >= 0 && Math.abs(PRESETS[weaponIdx].kt - state.kt) > 1e-6) weaponIdx = -1;
+  if (weaponIdx >= 0 && Math.abs(PRESETS[weaponIdx].kt - state.kt) > 1e-6) { weaponIdx = -1; state.vstyle = null; }
   $("weapon").value = String(weaponIdx);
   const p = PRESETS[weaponIdx];
   $("weaponInfo").innerHTML = p ? `<b>${p.origin || p.country}, ${p.year}.</b> ${p.note}` : "Sprengkraft frei gewählt.";
 }
 $("weapon").addEventListener("change", e => {
   weaponIdx = +e.target.value;
-  if (weaponIdx >= 0) { const p = PRESETS[weaponIdx]; setType(p.type || "nuc", p.smoke, p.thermo); setYield(p.kt); } else syncWeapon();
+  if (weaponIdx >= 0) { const p = PRESETS[weaponIdx]; setType(p.type || "nuc", p.smoke, p.thermo, p.vstyle); setYield(p.kt); } else syncWeapon();
   if (state.detonated || state.boom) clearDetonation();
 });
 $("yieldRange").addEventListener("input", e => { setYield(Math.pow(10, +e.target.value), true); if (state.detonated || state.boom) clearDetonation(); });
