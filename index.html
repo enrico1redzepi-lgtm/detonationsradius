@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Detonationsradius</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+/* Layout: Vollbild-Nachtkarte, Bedienfeld links (Desktop) bzw. unten (Handy). Bewusst nur ein dunkles Thema. */
+:root {
+  --ink: #0a1017;
+  --land: #17212b;
+  --urban: #233140;
+  --panel: #0e151d;
+  --line: #273442;
+  --text: #e7ecf1;
+  --muted: #8d9aa8;
+  --accent: #ff6a3d;
+  --fx-fireball: #fff1bf;
+  --fx-heavy: #ff3b30;
+  --fx-rad: #5fd896;
+  --fx-moderate: #ff8a3d;
+  --fx-thermal: #ffb627;
+  --fx-light: #8fa3ff;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--ink); color: var(--text); font: 14px/1.45 var(--body); overflow: hidden; }
+
+.app { height: 100%; display: grid; grid-template-columns: 380px 1fr; }
+.map-wrap { position: relative; min-height: 0; grid-column: 2; grid-row: 1; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
+.panel { grid-column: 1; grid-row: 1; background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding: 18px 18px 24px; }
+
+@media (max-width: 859px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .map-wrap { grid-column: 1; grid-row: 1; }
+  .panel { grid-column: 1; grid-row: 2; border-right: 0; border-top: 1px solid var(--line); max-height: 54vh; padding: 10px 16px 20px; gap: 14px; border-radius: 14px 14px 0 0; margin-top: -14px; position: relative; z-index: 2; transition: max-height .25s ease; }
+  .panel.collapsed { max-height: 132px; overflow: hidden; }
+  .grip { display: flex !important; }
+}
+.grip { display: none; justify-content: center; padding: 2px 0 0; background: none; border: 0; cursor: pointer; }
+.grip span { width: 40px; height: 4px; border-radius: 2px; background: var(--line); }
+
+header h1 { font: 600 26px/1 var(--display); letter-spacing: .02em; text-transform: uppercase; margin: 0; text-wrap: balance; }
+header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.label { font: 600 12px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+
+.search { position: relative; }
+.search input { width: 100%; }
+input[type=text], input[type=number], select {
+  background: var(--ink); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; font: 15px var(--body); outline: none;
+}
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.results { position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; z-index: 10; overflow: hidden; display: none; }
+.results.open { display: block; }
+.results button { display: flex; justify-content: space-between; gap: 12px; width: 100%; text-align: left; background: none; border: 0; color: var(--text); padding: 10px 12px; font: 14px var(--body); cursor: pointer; }
+.results button:hover, .results button.active { background: var(--land); }
+.results small { color: var(--muted); }
+
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chip { flex: none; background: var(--ink); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 7px 12px; font: 13px var(--body); cursor: pointer; white-space: nowrap; }
+.chip b { font-weight: 500; color: var(--muted); margin-left: 4px; font-family: var(--mono); font-size: 12px; }
+.chip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--ink)); }
+
+.yield-row { display: grid; grid-template-columns: 1fr 74px; gap: 8px; }
+.yield-row input { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--accent); margin: 4px 0 0; }
+.ticks { display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--muted); }
+
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 3px; }
+.seg button { background: none; border: 0; color: var(--muted); padding: 8px; border-radius: 6px; font: 500 13px var(--body); cursor: pointer; }
+.seg button.on { background: var(--land); color: var(--text); }
+
+.actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.btn { border: 0; border-radius: 8px; padding: 12px 16px; font: 600 17px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+.btn.primary { background: var(--accent); color: #1a0a04; }
+.btn.primary:disabled { opacity: .45; cursor: default; }
+.btn.ghost { background: none; color: var(--muted); border: 1px solid var(--line); }
+
+.summary { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--muted); }
+.summary b { color: var(--text); font-weight: 500; }
+
+.fx { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.fx li { display: grid; grid-template-columns: 14px 1fr auto; gap: 4px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.fx .dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; border: 2px solid; }
+.fx .name { font-weight: 600; }
+.fx .name small { font-weight: 400; color: var(--muted); }
+.fx .num { font: 500 14px var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.fx .num small { display: block; color: var(--muted); font-size: 11px; }
+.fx .desc { grid-column: 2 / 4; color: var(--muted); font-size: 13px; }
+
+.todo { border: 1px dashed var(--line); border-radius: 8px; padding: 12px; color: var(--muted); font-size: 13px; }
+.todo strong { color: var(--text); font-weight: 600; }
+.foot { color: var(--muted); font-size: 12px; margin-top: auto; }
+.foot p { margin: 0 0 6px; max-width: 65ch; }
+
+.hud { position: absolute; left: 12px; bottom: 26px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.scalebar { font: 11px var(--mono); color: var(--text); }
+.scalebar i { display: block; height: 6px; border: 1.5px solid var(--text); border-top: 0; margin-top: 2px; }
+.attr { position: absolute; right: 8px; bottom: 22px; font-size: 11px; color: var(--muted); pointer-events: none; }
+.hint { position: absolute; top: 12px; left: 12px; right: 64px; width: fit-content; max-width: 460px; margin: 0 auto; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); padding: 7px 12px; border-radius: 14px; font-size: 13px; text-align: center; text-wrap: balance; pointer-events: none; }
+.zoom { position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.zoom button { width: 38px; height: 38px; background: var(--panel); color: var(--text); border: 0; font: 20px var(--body); cursor: pointer; }
+.zoom button + button { border-top: 1px solid var(--line); }
+.zoom button svg { width: 18px; height: 18px; vertical-align: middle; }
+.zoom button.off { color: var(--muted); }
+.timer { font: 600 30px/1 var(--display); letter-spacing: .04em; font-variant-numeric: tabular-nums; color: var(--text); text-shadow: 0 1px 6px rgba(0,0,0,.7); opacity: 0; transition: opacity .3s; }
+.timer small { display: block; font: 500 12px/1.3 var(--body); letter-spacing: 0; color: #cfd8e1; margin-top: 4px; }
+.timer.show { opacity: 1; }
+#map { will-change: transform; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font: 600 15px var(--display); letter-spacing: .14em; text-transform: uppercase; pointer-events: none; }
+.flash { position: absolute; inset: 0; background: #fff8e6; opacity: 0; pointer-events: none; }
+@media (max-width: 859px) { .hud { bottom: 30px; } .attr { bottom: 26px; } }
+@media (prefers-reduced-motion: reduce) { .panel { transition: none; } }
+</style>
+<style>
+.stage { position: absolute; inset: 0; will-change: transform; }
+#map { position: absolute; inset: 0; cursor: crosshair; }
+#fxlayer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.layers { position: absolute; left: 12px; top: 12px; display: grid; grid-template-columns: 1fr 1fr; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 3px; z-index: 3; }
+.layers button { background: none; border: 0; color: var(--muted); padding: 7px 12px; border-radius: 6px; font: 500 13px var(--body); cursor: pointer; }
+.layers button.on { background: var(--land); color: var(--text); }
+.hint { top: 58px; left: 12px; right: auto; max-width: min(420px, calc(100% - 76px)); margin: 0; }
+.zoom { z-index: 3; }
+.zoom button.on { color: var(--accent); }
+.hud { z-index: 3; bottom: 34px; }
+.maptiler-logo { position: absolute; left: 10px; bottom: 6px; z-index: 3; display: block; width: 72px; }
+.maptiler-logo img { width: 100%; display: block; }
+.maplibregl-ctrl-scale { background: rgba(14,21,29,.75); color: var(--text); border-color: var(--text); font: 11px var(--mono); }
+.maplibregl-ctrl-attrib { background: rgba(14,21,29,.75) !important; color: var(--muted); font-size: 11px; }
+.maplibregl-ctrl-attrib a { color: var(--muted); }
+.maplibregl-ctrl-attrib-button { filter: invert(1); }
+.maplibregl-ctrl-bottom-left { left: 86px; }
+@media (max-width: 859px) { .hud { bottom: 40px; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="map-wrap">
+    <div class="stage" id="stage">
+      <div id="map" aria-label="Karte. Tippen setzt den Zielpunkt."></div>
+      <canvas id="fxlayer"></canvas>
+    </div>
+    <div class="layers" id="layers" role="group" aria-label="Kartenebene">
+      <button data-v="map" class="on">Karte</button>
+      <button data-v="sat">Satellit</button>
+    </div>
+    <div class="hint" id="hint">Auf die Karte tippen oder das Fadenkreuz ziehen, um das Ziel zu setzen</div>
+    <div class="zoom">
+      <button id="zin" aria-label="Hineinzoomen">+</button>
+      <button id="zout" aria-label="Herauszoomen">−</button>
+      <button id="tilt" aria-label="3D-Ansicht umschalten" style="font: 600 13px var(--display); letter-spacing:.06em">3D</button>
+      <button id="replay" aria-label="Explosion erneut abspielen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+      <button id="mute" aria-label="Ton aus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="wave" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="x" d="M17 9l5 6M22 9l-5 6" style="display:none"/></svg></button>
+    </div>
+    <div class="hud">
+      <div class="timer" id="timer"><span id="tval">T + 0,0 s</span><small id="tphase"></small></div>
+    </div>
+    <a class="maptiler-logo" href="https://www.maptiler.com" target="_blank" rel="noopener"><img src="https://api.maptiler.com/resources/logo.svg" alt="MapTiler"></a>
+    <div class="flash" id="flash"></div>
+  </div>
+
+  <aside class="panel" id="panel">
+    <button class="grip" id="grip" aria-label="Bedienfeld ein- oder ausklappen"><span></span></button>
+    <header>
+      <h1>Detonationsradius</h1>
+      <p>Wirkungszonen einer Kernexplosion auf der Karte</p>
+    </header>
+
+    <div class="field search">
+      <label class="label" for="q">Ort</label>
+      <input type="text" id="q" placeholder="Stadt suchen, z. B. Hamburg" autocomplete="off">
+      <div class="results" id="results" role="listbox"></div>
+    </div>
+
+    <div class="field">
+      <span class="label">Waffe</span>
+      <div class="chips" id="presets"></div>
+    </div>
+
+    <div class="field">
+      <label class="label" for="yieldNum">Sprengkraft</label>
+      <div class="yield-row">
+        <input type="number" id="yieldNum" min="0.01" step="any" inputmode="decimal">
+        <select id="yieldUnit" aria-label="Einheit"><option value="0.001">t</option><option value="1">kt</option><option value="1000">Mt</option></select>
+      </div>
+      <input type="range" id="yieldRange" min="-2" max="5" step="0.01" aria-label="Sprengkraft, logarithmisch">
+      <div class="ticks"><span>10 t</span><span>1 kt</span><span>100 kt</span><span>10 Mt</span><span>100 Mt</span></div>
+    </div>
+
+    <div class="field">
+      <span class="label">Detonation</span>
+      <div class="seg" id="burst">
+        <button data-v="air" class="on">In der Luft</button>
+        <button data-v="surface">Am Boden</button>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn primary" id="go">Zünden</button>
+      <button class="btn ghost" id="reset">Zurücksetzen</button>
+    </div>
+
+    <div class="summary" id="summary"></div>
+    <ul class="fx" id="fx"></ul>
+
+    <div class="todo"><strong>Opferschätzung folgt im nächsten Schritt.</strong> Dafür kommen Bevölkerungsdaten (Einwohner je Quadratkilometer) und Sterbe- bzw. Verletzungsraten je Zone dazu.</div>
+
+    <div class="foot">
+      <p>Radien sind Näherungen nach den Skalierungsgesetzen aus Glasstone &amp; Dolan, „The Effects of Nuclear Weapons“ (1977). Wetter, Gelände und Bebauung verschieben sie im Ernstfall deutlich. Fallout ist noch nicht enthalten.</p>
+      <p>Ortssuche: Natural Earth. Karten: MapTiler, OpenStreetMap-Mitwirkende.</p>
+    </div>
+  </aside>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+<script>
+const MAPTILER_KEY = "aDwpl0vXQKNhhFcGeCnT";
+const STYLES = {
+  map: `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${MAPTILER_KEY}`,
+  sat: `https://api.maptiler.com/maps/hybrid/style.json?key=${MAPTILER_KEY}`,
+};
+
+/* ---------- Wirkungsmodell (W in Kilotonnen, Radien in km) ---------- */
+const EFFECTS = [
+  { id: "fireball", name: "Feuerball", unit: "", color: "--fx-fireball",
+    r: (W, b) => 0.07 * Math.pow(W, 0.4) * (b === "surface" ? 1.26 : 1),
+    desc: b => b === "surface" ? "Alles im Feuerball verdampft. Am Boden entsteht ein Krater, der Boden wird stark radioaktiv." : "Alles im Feuerball verdampft. Bei optimaler Höhe berührt er den Boden meist nicht." },
+  { id: "heavy", name: "Schwere Druckwelle", unit: "20 psi · 1,4 bar", color: "--fx-heavy",
+    r: (W, b) => (b === "surface" ? 0.17 : 0.20) * Math.cbrt(W),
+    desc: () => "Auch Stahlbetonbauten werden zerstört oder schwer beschädigt. Kaum jemand überlebt." },
+  { id: "rad", name: "Anfangsstrahlung", unit: "500 rem · 5 Sv", color: "--fx-rad",
+    r: (W) => 0.70 * Math.pow(W, 0.2),
+    desc: () => "Ohne medizinische Behandlung sterben 50 bis 90 % der Betroffenen innerhalb weniger Wochen." },
+  { id: "moderate", name: "Mittlere Druckwelle", unit: "5 psi · 0,34 bar", color: "--fx-moderate",
+    r: (W, b) => (b === "surface" ? 0.36 : 0.47) * Math.cbrt(W),
+    desc: () => "Die meisten Wohnhäuser stürzen ein, Brände breiten sich aus. Sehr viele Tote und Verletzte." },
+  { id: "thermal", name: "Hitzestrahlung", unit: "Verbrennungen 3. Grades", color: "--fx-thermal",
+    r: (W, b) => 0.61 * Math.pow(W, 0.42) * (b === "surface" ? 0.8 : 1),
+    desc: () => "Ungeschützte Haut verbrennt bis in tiefe Schichten, oft tödlich. Holz und Stoffe fangen Feuer." },
+  { id: "light", name: "Leichte Druckwelle", unit: "1 psi · 0,07 bar", color: "--fx-light",
+    r: (W, b) => (b === "surface" ? 0.92 : 1.22) * Math.cbrt(W),
+    desc: () => "Fenster bersten. Glassplitter verletzen viele Menschen, die sich in Gebäuden aufhalten." },
+];
+const burstHeightKm = W => 0.24 * Math.cbrt(W); // für 5 psi optimiert (Hiroshima: 15 kt ≈ 600 m)
+const cloudRadiusKm = W => 0.9 * Math.pow(W, 0.33); // Pilzhut von oben, grobe Näherung
+const BLAST = { heavy: 1, moderate: 0.65, light: 0.35 }; // Stärke für Wackeln/Vibration
+
+/* Ankunftszeit der Druckwelle: Tabelle für 1 kt, skaliert mit W^(1/3) für Weg und Zeit.
+   Nahe am Feuerball ist die Front deutlich schneller als der Schall, weiter draußen ≈ 340 m/s. */
+const SHOCK = (() => {
+  const xs = [0], ts = [0];
+  let x = 0, t = 0;
+  const dx = 0.002;
+  while (x < 4) { const xm = Math.max(x + dx / 2, 0.004); t += dx / (0.34 * (1 + 2.5 * Math.pow(0.1 / xm, 1.3))); x += dx; xs.push(x); ts.push(t); }
+  return { xs, ts };
+})();
+function interp(a, b, v) { // a aufsteigend, liefert b an Stelle v
+  if (v <= a[0]) return b[0];
+  let lo = 0, hi = a.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (a[m] < v) lo = m; else hi = m; }
+  const f = (v - a[lo]) / (a[hi] - a[lo]);
+  return b[lo] + f * (b[hi] - b[lo]);
+}
+const shockTime = (rKm, W) => { const s = Math.cbrt(W); return interp(SHOCK.xs, SHOCK.ts, rKm / s) * s; };
+const shockRadius = (tS, W) => { const s = Math.cbrt(W); return interp(SHOCK.ts, SHOCK.xs, tS / s) * s; };
+function fmtSec(s) { return s < 10 ? nf(s, 1) + " s" : s < 120 ? nf(s, 0) + " s" : nf(s / 60, 1) + " min"; }
+
+const PRESETS = [
+  { name: "Davy Crockett", kt: 0.02 },
+  { name: "Little Boy (Hiroshima)", kt: 15 },
+  { name: "Fat Man (Nagasaki)", kt: 21 },
+  { name: "W76-1 (Trident)", kt: 90 },
+  { name: "W88", kt: 475 },
+  { name: "B83", kt: 1200 },
+  { name: "Castle Bravo", kt: 15000 },
+  { name: "Zar-Bombe", kt: 50000 },
+];
+
+
+
+/* ---------- Zustand und Hilfsfunktionen ---------- */
+const state = { kt: 15, burst: "air", target: [13.4132, 52.5219], detonated: true, boom: null, layer: "map" };
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const nf = (v, d) => v.toLocaleString("de-DE", { maximumFractionDigits: d, minimumFractionDigits: d });
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const clamp01 = v => Math.max(0, Math.min(1, v));
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+
+function fmtYield(kt) {
+  if (kt >= 1000) return nf(kt / 1000, kt >= 10000 ? 0 : 1) + " Mt";
+  if (kt >= 1) return nf(kt, kt >= 10 ? 0 : 1) + " kt";
+  return nf(kt * 1000, 0) + " t";
+}
+function fmtKm(r) { return r < 1 ? nf(r * 1000, 0) + " m" : nf(r, r < 10 ? 2 : 1) + " km"; }
+function fmtArea(r) { const a = Math.PI * r * r; return nf(a, a < 1 ? 2 : a < 100 ? 1 : 0) + " km²"; }
+
+/* Punkt in gegebener Entfernung und Richtung (Großkreis) */
+function dest([lon, lat], km, bearingDeg) {
+  const R = 6371, d = km / R, b = bearingDeg * Math.PI / 180;
+  const p1 = lat * Math.PI / 180, l1 = lon * Math.PI / 180;
+  const p2 = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(b));
+  const l2 = l1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2));
+  return [l2 * 180 / Math.PI, p2 * 180 / Math.PI];
+}
+function circleRing(center, km, steps = 128) {
+  const out = [];
+  for (let i = 0; i <= steps; i++) out.push(dest(center, km, i * 360 / steps));
+  return out;
+}
+
+/* ---------- Karte ---------- */
+const VIEW = { close: 0.62, wide: 0.2, still: 0.3 }; // Anteil des 1-psi-Radius an der halben Kartenhöhe
+const fx = $("fxlayer"), ctx = fx.getContext("2d");
+let W = 0, H = 0, DPR = 1;
+
+function zoomFor(frac, lat = state.target[1]) {
+  const rMax = Math.max(...EFFECTS.map(e => e.r(state.kt, state.burst)));
+  const box = $("map").getBoundingClientRect();
+  const kmpp = rMax / (Math.min(box.width, box.height) * frac);
+  return Math.max(0, Math.min(19, Math.log2(40075.016686 * Math.cos(lat * Math.PI / 180) / (512 * kmpp))));
+}
+
+const map = new maplibregl.Map({
+  container: "map",
+  style: STYLES.map,
+  center: state.target,
+  zoom: 11,
+  maxPitch: 70,
+  attributionControl: { compact: true },
+  dragRotate: true,
+});
+map.addControl(new maplibregl.ScaleControl({ unit: "metric", maxWidth: 110 }), "bottom-left");
+map.on("style.load", () => { try { map.setProjection({ type: "globe" }); } catch (e) {} });
+map.on("error", e => console.warn("Kartenfehler", e && e.error));
+
+const P = ll => { const p = map.project(ll); return [p.x, p.y]; };
+function pxPerKm() { const a = P(state.target), b = P(dest(state.target, 1, 90)); return Math.hypot(b[0] - a[0], b[1] - a[1]); }
+function ringPath(center, km) {
+  const pts = circleRing(center, km, km > 20 ? 180 : 128);
+  pts.forEach((c, i) => { const [x, y] = P(c); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.closePath();
+}
+
+function resizeFx() {
+  const r = fx.getBoundingClientRect();
+  W = r.width; H = r.height; DPR = Math.min(window.devicePixelRatio || 1, 2);
+  fx.width = W * DPR; fx.height = H * DPR;
+  schedule();
+}
+let pending = false;
+function schedule() { if (!pending) { pending = true; requestAnimationFrame(drawFx); } }
+map.on("move", schedule);
+map.on("resize", resizeFx);
+
+function currentRadii() { return EFFECTS.map(e => ({ ...e, km: e.r(state.kt, state.burst) })).sort((a, b) => a.km - b.km); }
+
+function drawFx() {
+  pending = false;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const now = performance.now();
+  drawEffects(now);
+  if (state.boom) drawExplosion(now);
+  drawTarget();
+  applyShake(now);
+  if (state.boom) schedule();
+}
+
+/* Zeitplan der Animation in Millisekunden (zusammengerafft, die Anzeige zeigt die echte Zeit) */
+const TL = { shockStart: 250, shockDur: 3800, cloudStart: 450, cloudGrow: 5200, fadeStart: 7600, end: 10200 };
+
+function drawEffects(now) {
+  if (!state.target || !state.detonated) return;
+  const list = currentRadii().slice().reverse();
+  const b = state.boom, el = b ? now - b.t0 : Infinity;
+  for (const e of list) {
+    let a = 1, extra = 0;
+    if (b) {
+      if (e.id === "fireball") a = clamp01((el - 3800) / 1200);
+      else if (e.id === "thermal" || e.id === "rad") { a = clamp01(el / 350); if (e.id === "thermal") extra = 0.4 * Math.exp(-el / 700); }
+      else a = clamp01((el - b.hitAt[e.id]) / 220);
+    }
+    if (a <= 0) continue;
+    const col = css(e.color);
+    ctx.beginPath(); ringPath(state.target, e.km);
+    ctx.globalAlpha = a * ((e.id === "fireball" ? 0.55 : 0.16) + extra); ctx.fillStyle = col; ctx.fill();
+    ctx.globalAlpha = a * 0.95; ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function startBoom() {
+  const W0 = state.kt, radii = {};
+  EFFECTS.forEach(e => radii[e.id] = e.r(W0, state.burst));
+  const rFront = radii.light * 1.04;
+  const tMax = shockTime(rFront, W0);
+  const hitAt = {}, tPhys = {};
+  for (const id of Object.keys(BLAST)) { tPhys[id] = shockTime(radii[id], W0); hitAt[id] = TL.shockStart + tPhys[id] / tMax * TL.shockDur; }
+  const parts = [];
+  for (let i = 0; i < 150; i++) parts.push({ a: Math.random() * 6.283, d: Math.sqrt(Math.random()), s: 0.22 + Math.random() * 0.3, w: (Math.random() - 0.5) * 0.5, sh: Math.random() });
+  const dust = [];
+  if (state.burst === "surface") for (let i = 0; i < 70; i++) dust.push({ a: Math.random() * 6.283, d: 0.9 + Math.random() * 0.7, s: 0.2 + Math.random() * 0.25, sh: Math.random() });
+  state.boom = { t0: performance.now(), W: W0, radii, rFront, tMax, hitAt, tPhys, fired: {}, parts, dust,
+                 rCloud: cloudRadiusKm(W0) * (state.burst === "surface" ? 0.85 : 1) };
+  // Kamera: nie hineinzoomen, nur herausfahren, wenn man näher dran ist als die Gesamtansicht
+  const zWide = zoomFor(VIEW.wide);
+  if (map.getZoom() > zWide + 0.05) map.easeTo({ center: state.target, zoom: zWide, duration: 5600, easing: t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2 });
+  shake(5, 0);
+  buzz([90, 50, 220]);
+  $("timer").classList.add("show");
+}
+
+function puff(x, y, sz, rgb, alpha) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, sz);
+  g.addColorStop(0, `rgba(${rgb},${alpha})`); g.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, sz, 0, 6.283); ctx.fill();
+}
+function offsetLL([lon, lat], dxKm, dyKm) { return [lon + dxKm / (111.32 * Math.cos(lat * Math.PI / 180)), lat + dyKm / 110.57]; }
+
+function drawExplosion(now) {
+  const b = state.boom, el = now - b.t0;
+  const [cx, cy] = P(state.target);
+  const pxkm = pxPerKm();
+
+  /* Druckwelle */
+  const ts = clamp01((el - TL.shockStart) / TL.shockDur);
+  const tPhysNow = ts * b.tMax;
+  if (el > TL.shockStart && ts < 1) {
+    const rKm = Math.max(b.radii.fireball, shockRadius(tPhysNow, b.W));
+    const fade = 1 - 0.65 * ts;
+    ctx.beginPath(); ringPath(state.target, rKm); ringPath(state.target, rKm * 0.8);
+    ctx.fillStyle = `rgba(255,250,235,${0.14 * fade})`; ctx.fill("evenodd");
+    ctx.beginPath(); ringPath(state.target, rKm);
+    ctx.strokeStyle = `rgba(255,252,240,${0.95 * fade})`; ctx.lineWidth = 2.5; ctx.stroke();
+  }
+  for (const id of Object.keys(BLAST)) if (!b.fired[id] && el >= b.hitAt[id]) {
+    b.fired[id] = true; shake(10 * BLAST[id], 0); buzz(Math.round(120 * BLAST[id])); thump(BLAST[id]);
+  }
+
+  /* Pilzwolke von oben */
+  const cp = easeOut(clamp01((el - TL.cloudStart) / TL.cloudGrow));
+  const cA = clamp01((el - TL.cloudStart) / 700) * (1 - clamp01((el - TL.fadeStart) / (TL.end - TL.fadeStart)));
+  if (cA > 0) {
+    const Rk = b.radii.fireball + (b.rCloud - b.radii.fireball) * cp;
+    const heat = clamp01(1 - (el - TL.cloudStart) / 2400);
+    for (const d of b.dust) {
+      const ang = d.a + cp * 0.2, dist = d.d * Rk * (0.4 + 0.6 * cp);
+      const [x, y] = P(offsetLL(state.target, Math.cos(ang) * dist, Math.sin(ang) * dist));
+      puff(x, y, d.s * Rk * pxkm, `${120 - d.sh * 30 | 0},${102 - d.sh * 25 | 0},${80 - d.sh * 20 | 0}`, 0.16 * cA);
+    }
+    for (const p of b.parts) {
+      const ang = p.a + p.w * cp * 1.6, dist = p.d * Rk * 0.82;
+      const [x, y] = P(offsetLL(state.target, Math.cos(ang) * dist, Math.sin(ang) * dist));
+      const sz = Math.max(3, p.s * Rk * pxkm * (0.55 + 0.45 * cp));
+      const k = 1 - p.sh * 0.35;
+      const rgb = `${Math.round((255 * heat + 104 * (1 - heat)) * k)},${Math.round((140 * heat + 96 * (1 - heat)) * k)},${Math.round((60 * heat + 90 * (1 - heat)) * k)}`;
+      puff(x, y, sz, rgb, 0.26 * cA);
+    }
+  }
+
+  /* Feuerball und Lichtblitz */
+  const life = el < 600 ? 1 : clamp01(1 - (el - 600) / 3200);
+  if (life > 0) {
+    const R0 = b.radii.fireball * pxkm;
+    const r = Math.max(5, R0 * (el < 450 ? easeOut(el / 450) : 1 + 0.3 * clamp01((el - 450) / 3000)));
+    const flick = 1 + 0.05 * Math.sin(el * 0.05) + 0.03 * Math.sin(el * 0.137);
+    const heat = clamp01(1 - el / 2600);
+    ctx.globalCompositeOperation = "lighter";
+    const glow = Math.exp(-el / 380);
+    if (glow > 0.01) {
+      const gr = r * 7 + 60;
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, gr);
+      g.addColorStop(0, `rgba(255,244,214,${0.75 * glow})`); g.addColorStop(1, "rgba(255,200,120,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, gr, 0, 6.283); ctx.fill();
+    }
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * flick);
+    g.addColorStop(0, `rgba(255,${Math.round(200 + 55 * heat)},${Math.round(120 + 135 * heat)},${life})`);
+    g.addColorStop(0.45, `rgba(255,${Math.round(110 + 90 * heat)},${Math.round(30 + 60 * heat)},${0.9 * life})`);
+    g.addColorStop(0.8, `rgba(${Math.round(180 + 60 * heat)},${Math.round(40 + 40 * heat)},20,${0.55 * life})`);
+    g.addColorStop(1, "rgba(120,20,10,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r * flick, 0, 6.283); ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  /* Zeitanzeige: echte Zeit seit der Detonation */
+  let phase;
+  if (el < 300) phase = "Lichtblitz: Hitzestrahlung trifft sofort ein";
+  else if (ts < 1) {
+    const passed = Object.keys(BLAST).filter(id => b.fired[id]);
+    phase = passed.length ? EFFECTS.find(e => e.id === passed[passed.length - 1]).name + " durchläuft ihre Zone" : "Feuerball dehnt sich aus, Druckwelle läuft los";
+  } else phase = "Pilzwolke steigt auf";
+  $("tval").textContent = "T + " + fmtSec(Math.max(0.1, tPhysNow));
+  $("tphase").textContent = phase;
+  if (el > TL.end) { state.boom = null; $("tphase").textContent = "Druckwelle erreicht 1 psi nach " + fmtSec(b.tPhys.light); }
+}
+
+function drawTarget() {
+  if (!state.target) return;
+  const [x, y] = P(state.target);
+  ctx.fillStyle = dragging ? "rgba(255,255,255,.25)" : "rgba(255,255,255,.12)";
+  ctx.beginPath(); ctx.arc(x, y, 18, 0, 2 * Math.PI); ctx.fill();
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI);
+  ctx.moveTo(x - 13, y); ctx.lineTo(x - 4, y); ctx.moveTo(x + 4, y); ctx.lineTo(x + 13, y);
+  ctx.moveTo(x, y - 13); ctx.lineTo(x, y - 4); ctx.moveTo(x, y + 4); ctx.lineTo(x, y + 13);
+  ctx.stroke();
+}
+
+/* Wackeln, Vibration, Ton */
+let shakes = [];
+function shake(amp, delay) { if (!reduceMotion) shakes.push({ t: performance.now() + delay, amp }); }
+function applyShake(now) {
+  const st = $("stage");
+  shakes = shakes.filter(s => now - s.t < 900);
+  let amp = 0;
+  for (const s of shakes) if (now >= s.t) amp += s.amp * Math.exp(-(now - s.t) / 220);
+  if (amp < 0.3) { st.style.transform = ""; if (shakes.length) schedule(); return; }
+  st.style.transform = `translate(${(Math.random() - 0.5) * 2 * amp}px,${(Math.random() - 0.5) * 2 * amp}px)`;
+  schedule();
+}
+function buzz(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
+let actx = null, muted = false;
+function audioInit() {
+  if (muted) return;
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); } catch (e) { actx = null; }
+}
+function playBoom() {
+  if (!actx || muted) return;
+  const t = actx.currentTime, sr = actx.sampleRate;
+  const vol = Math.max(0.45, Math.min(1, 0.55 + 0.1 * Math.log10(state.kt)));
+  const out = actx.createGain(); out.gain.value = 0.85 * vol; out.connect(actx.destination);
+  // Rumpeln: braunes Rauschen durch einen Tiefpass, der sich langsam schließt
+  const len = 6, buf = actx.createBuffer(1, sr * len, sr), d = buf.getChannelData(0);
+  let last = 0; for (let i = 0; i < d.length; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
+  const src = actx.createBufferSource(); src.buffer = buf;
+  const lp = actx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.setValueAtTime(1000, t); lp.frequency.exponentialRampToValueAtTime(80, t + 4.5);
+  const g = actx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + 0.03); g.gain.exponentialRampToValueAtTime(0.001, t + 5.8);
+  src.connect(lp).connect(g).connect(out); src.start(t); src.stop(t + len);
+  // Tiefer Schlag
+  const o = actx.createOscillator(); o.type = "sine"; o.frequency.setValueAtTime(60, t); o.frequency.exponentialRampToValueAtTime(26, t + 2.2);
+  const og = actx.createGain(); og.gain.setValueAtTime(0.9, t); og.gain.exponentialRampToValueAtTime(0.001, t + 2.6);
+  o.connect(og).connect(out); o.start(t); o.stop(t + 2.7);
+  // Knall
+  const cb = actx.createBuffer(1, sr * 0.15, sr), cd = cb.getChannelData(0);
+  for (let i = 0; i < cd.length; i++) cd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / cd.length, 3);
+  const cs = actx.createBufferSource(); cs.buffer = cb;
+  const hp = actx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 1200;
+  const cg = actx.createGain(); cg.gain.value = 0.35;
+  cs.connect(hp).connect(cg).connect(out); cs.start(t);
+}
+function thump(strength) {
+  if (!actx || muted) return;
+  const t = actx.currentTime;
+  const o = actx.createOscillator(); o.frequency.setValueAtTime(75, t); o.frequency.exponentialRampToValueAtTime(32, t + 0.35);
+  const g = actx.createGain(); g.gain.setValueAtTime(0.7 * strength, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+  o.connect(g).connect(actx.destination); o.start(t); o.stop(t + 0.55);
+}
+
+
+/* ---------- Ziel setzen und ziehen ---------- */
+let dragging = false, justDragged = 0;
+function nearTarget(pt) { if (!state.target) return false; const [x, y] = P(state.target); return Math.hypot(pt.x - x, pt.y - y) < 30; }
+function clearDetonation() {
+  boomToken++; state.detonated = false; state.boom = null; shakes = []; $("stage").style.transform = "";
+  $("timer").classList.remove("show");
+  render();
+}
+function setTarget(ll) {
+  state.target = ll;
+  clearDetonation();
+  $("hint").textContent = "Ziel gesetzt. „Zünden“ startet die Explosion.";
+}
+function onDown(e) {
+  const oe = e.originalEvent;
+  if (oe.touches && oe.touches.length > 1) return;
+  if (!nearTarget(e.point)) return;
+  e.preventDefault();
+  dragging = true;
+  map.dragPan.disable();
+  if (state.detonated || state.boom) clearDetonation();
+  map.getCanvas().style.cursor = "grabbing";
+  map.on("mousemove", onMove); map.on("touchmove", onMove);
+  map.once("mouseup", onUp); map.once("touchend", onUp);
+}
+function onMove(e) { if (!dragging) return; state.target = [e.lngLat.lng, e.lngLat.lat]; schedule(); }
+function onUp() {
+  dragging = false; justDragged = performance.now();
+  map.off("mousemove", onMove); map.off("touchmove", onMove);
+  map.dragPan.enable();
+  map.getCanvas().style.cursor = "";
+  schedule();
+}
+map.on("mousedown", onDown);
+map.on("touchstart", onDown);
+map.on("mousemove", e => { if (!dragging) map.getCanvas().style.cursor = nearTarget(e.point) ? "grab" : ""; });
+map.on("click", e => { if (performance.now() - justDragged < 350) return; setTarget([e.lngLat.lng, e.lngLat.lat]); });
+
+/* ---------- Bedienung ---------- */
+let boomToken = 0;
+function detonate() {
+  if (!state.target) return;
+  audioInit(); // muss direkt im Tipp passieren, sonst blockiert der Browser den Ton
+  ++boomToken;
+  state.boom = null;
+  state.detonated = true;
+  $("hint").textContent = "Fadenkreuz ziehen oder auf die Karte tippen, um das Ziel zu verschieben";
+  if (!reduceMotion) {
+    $("flash").animate([{ opacity: 0.9 }, { opacity: 0 }], { duration: 650, easing: "ease-out" });
+    startBoom();
+    playBoom();
+  }
+  render();
+}
+function setYield(kt, fromRange) {
+  state.kt = Math.min(100000, Math.max(0.01, kt));
+  if (!fromRange) $("yieldRange").value = Math.log10(state.kt);
+  const unit = state.kt >= 1000 ? 1000 : state.kt >= 1 ? 1 : 0.001;
+  $("yieldUnit").value = String(unit);
+  const val = state.kt / unit;
+  $("yieldNum").value = +val.toPrecision(val >= 100 ? 3 : 2);
+  document.querySelectorAll(".chip").forEach(c => c.classList.toggle("on", Math.abs(+c.dataset.kt - state.kt) < 1e-6));
+  render();
+}
+function render() {
+  const list = currentRadii();
+  $("summary").innerHTML = state.burst === "air"
+    ? `<span>Sprengkraft <b>${fmtYield(state.kt)}</b></span><span>Detonationshöhe <b>≈ ${fmtKm(burstHeightKm(state.kt))}</b></span>`
+    : `<span>Sprengkraft <b>${fmtYield(state.kt)}</b></span><span><b>Bodendetonation</b> mit starkem Fallout</span>`;
+  $("fx").innerHTML = list.slice().reverse().map(e => `
+    <li>
+      <span class="dot" style="border-color:var(${e.color});background:color-mix(in srgb, var(${e.color}) 35%, transparent)"></span>
+      <span class="name">${e.name}${e.unit ? ` <small>${e.unit}</small>` : ""}</span>
+      <span class="num">${fmtKm(e.km)}<small>${fmtArea(e.km)}</small></span>
+      <span class="desc">${e.desc(state.burst)} ${BLAST[e.id] ? `Die Druckwelle trifft nach ≈ ${fmtSec(shockTime(e.km, state.kt))} ein.` : e.id === "thermal" || e.id === "rad" ? "Wirkt mit dem Lichtblitz, also sofort." : ""}</span>
+    </li>`).join("");
+  schedule();
+}
+
+$("presets").innerHTML = PRESETS.map(p => `<button class="chip" data-kt="${p.kt}">${p.name}<b>${fmtYield(p.kt)}</b></button>`).join("");
+$("presets").addEventListener("click", e => { const c = e.target.closest(".chip"); if (c) setYield(+c.dataset.kt); });
+$("yieldRange").addEventListener("input", e => setYield(Math.pow(10, +e.target.value), true));
+const numChange = () => { const v = parseFloat(String($("yieldNum").value).replace(",", ".")); if (v > 0) setYield(v * +$("yieldUnit").value); };
+$("yieldNum").addEventListener("change", numChange);
+$("yieldUnit").addEventListener("change", numChange);
+$("burst").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  state.burst = b.dataset.v;
+  document.querySelectorAll("#burst button").forEach(x => x.classList.toggle("on", x === b));
+  render();
+});
+$("go").addEventListener("click", detonate);
+$("reset").addEventListener("click", () => { clearDetonation(); $("hint").textContent = "Auf die Karte tippen oder das Fadenkreuz ziehen, um das Ziel zu setzen"; });
+$("replay").addEventListener("click", detonate);
+$("zin").addEventListener("click", () => map.zoomIn());
+$("zout").addEventListener("click", () => map.zoomOut());
+$("tilt").addEventListener("click", () => {
+  const tilted = map.getPitch() > 5;
+  map.easeTo({ pitch: tilted ? 0 : 60, bearing: tilted ? 0 : map.getBearing(), duration: 700 });
+  $("tilt").classList.toggle("on", !tilted);
+});
+map.on("pitchend", () => $("tilt").classList.toggle("on", map.getPitch() > 5));
+$("mute").addEventListener("click", () => {
+  muted = !muted;
+  const m = $("mute");
+  m.classList.toggle("off", muted);
+  m.setAttribute("aria-label", muted ? "Ton an" : "Ton aus");
+  m.querySelector(".wave").style.display = muted ? "none" : "";
+  m.querySelector(".x").style.display = muted ? "" : "none";
+});
+$("layers").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b || b.dataset.v === state.layer) return;
+  state.layer = b.dataset.v;
+  document.querySelectorAll("#layers button").forEach(x => x.classList.toggle("on", x === b));
+  map.setStyle(STYLES[state.layer]);
+});
+$("grip").addEventListener("click", () => { $("panel").classList.toggle("collapsed"); setTimeout(() => map.resize(), 280); });
+
+/* Ortssuche */
+let places = [];
+const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/ß/g, "ss");
+const ALIAS = { "munchen": "munich", "koln": "cologne", "wien": "vienna", "rom": "rome", "prag": "prague", "warschau": "warsaw", "moskau": "moscow", "peking": "beijing", "kiew": "kyiv", "mailand": "milan", "brussel": "brussels", "lissabon": "lisbon", "nurnberg": "nuremberg", "kopenhagen": "copenhagen", "athen": "athens", "neu-delhi": "new delhi" };
+let hits = [], active = 0;
+$("q").addEventListener("input", e => {
+  const q = norm(e.target.value.trim());
+  if (q.length < 2) { $("results").classList.remove("open"); return; }
+  const qa = ALIAS[q] || q;
+  hits = places.filter(p => { const n = norm(p[0]); return n.startsWith(q) || n.startsWith(qa); }).slice(0, 6);
+  if (hits.length < 6) hits = hits.concat(places.filter(p => !hits.includes(p) && norm(p[0]).includes(q)).slice(0, 6 - hits.length));
+  active = 0; showHits();
+});
+$("q").addEventListener("keydown", e => {
+  if (!hits.length) return;
+  if (e.key === "ArrowDown") { active = (active + 1) % hits.length; showHits(); e.preventDefault(); }
+  if (e.key === "ArrowUp") { active = (active + hits.length - 1) % hits.length; showHits(); e.preventDefault(); }
+  if (e.key === "Enter") pick(hits[active]);
+});
+function showHits() {
+  $("results").innerHTML = hits.map((p, i) => `<button data-i="${i}" class="${i === active ? "active" : ""}"><span>${p[0]}</span><small>${p[1]}${p[4] ? " · " + (p[4] < 1e5 ? "<0,1" : nf(p[4] / 1e6, 1)) + " Mio." : ""}</small></button>`).join("") || `<button disabled><small>Kein Ort gefunden</small></button>`;
+  $("results").classList.add("open");
+}
+$("results").addEventListener("click", e => { const b = e.target.closest("button[data-i]"); if (b) pick(hits[+b.dataset.i]); });
+document.addEventListener("click", e => { if (!e.target.closest(".search")) $("results").classList.remove("open"); });
+function pick(p) {
+  $("q").value = p[0]; $("results").classList.remove("open"); $("q").blur();
+  setTarget([p[3], p[2]]);
+  map.flyTo({ center: state.target, zoom: zoomFor(VIEW.still), duration: reduceMotion ? 0 : 1600, essential: true });
+}
+
+/* ---------- Start ---------- */
+resizeFx();
+window.addEventListener("resize", resizeFx);
+setYield(15);
+map.jumpTo({ center: state.target, zoom: zoomFor(VIEW.still) });
+$("hint").textContent = "Beispiel: Hiroshima-Bombe über Berlin. „Zünden“ spielt die Explosion ab.";
+fetch("data/places.json").then(r => r.json()).then(d => places = d).catch(() => {});
+</script>
+</body>
+</html>
