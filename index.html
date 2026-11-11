@@ -8,11 +8,13 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="Detonationsradius">
 <meta property="og:description" content="Wähle eine Waffe und einen Ort und sieh, was eine Explosion dort anrichten würde.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
-<link href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" rel="stylesheet">
+<link href="vendor/maplibre-gl-5.24.0/maplibre-gl.css" rel="stylesheet">
 <style>
+/* Schriften lokal (SIL Open Font License, siehe fonts/OFL-Geist.txt) – kein Abruf bei Google */
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 100 900; font-display: swap; src: url(fonts/geist-latin-wght-normal.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 100 900; font-display: swap; src: url(fonts/geist-latin-ext-wght-normal.woff2) format("woff2"); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: "Geist Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/geist-mono-latin-500-normal.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Geist Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/geist-mono-latin-ext-500-normal.woff2) format("woff2"); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
 /* Layout: Vollbild-Nachtkarte, Bedienfeld links (Desktop) bzw. unten (Handy). Bewusst nur ein dunkles Thema. */
 :root {
   --ink: #0b0c0e;
@@ -229,6 +231,7 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
       <li>Kartenkacheln, Satellitenbilder und Gebäude: <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">© MapTiler</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap-Mitwirkende</a> (Open Database License)</li>
       <li>Ortssuche: <a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a>, gemeinfrei</li>
       <li>Kartendarstellung: <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre GL JS</a>, BSD-3-Lizenz</li>
+      <li>Schrift: Geist und Geist Mono (Vercel), SIL Open Font License 1.1. Schriften und Kartenbibliothek liegen auf dieser Seite selbst, es werden keine Daten an Google oder CDNs übertragen.</li>
     </ul>
 
     <h3>Bevölkerung</h3>
@@ -373,7 +376,7 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
   </aside>
 </div>
 
-<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+<script src="vendor/maplibre-gl-5.24.0/maplibre-gl.js"></script>
 <script>
 const MAPTILER_KEY = "aDwpl0vXQKNhhFcGeCnT";
 const STYLES = {
