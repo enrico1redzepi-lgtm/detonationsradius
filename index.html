@@ -459,7 +459,63 @@ const map = new maplibregl.Map({
   dragRotate: true,
 });
 map.addControl(new maplibregl.ScaleControl({ unit: "metric", maxWidth: 110 }), "bottom-left");
-map.on("style.load", () => { try { map.setProjection({ type: "globe" }); } catch (e) {} });
+map.on("style.load", () => { try { map.setProjection({ type: "globe" }); } catch (e) {} addBuildings(); });
+
+/* ---------- 3D-Gebäude, die je nach Zone einstürzen ----------
+   Nutzt die Gebäude aus den MapTiler-Kacheln. Der Abstand jedes Gebäudes zum Ziel wird von MapLibre
+   selbst berechnet ("distance"), die Zerstörung folgt der Druckfront in kurzen Schritten. */
+const BLD = "dr-buildings";
+let bldReach = null;            // null = unbeschädigt, sonst bereits von der Druckwelle erreichter Radius (m)
+function addBuildings() {
+  const st = map.getStyle(); if (!st) return;
+  const own = st.layers.filter(l => l["source-layer"] === "building");
+  if (!own.length || map.getLayer(BLD)) return;
+  own.filter(l => l.type === "fill-extrusion").forEach(l => map.setLayoutProperty(l.id, "visibility", "none"));
+  const firstSymbol = st.layers.find(l => l.type === "symbol");
+  map.addLayer({
+    id: BLD, type: "fill-extrusion", source: own[0].source, "source-layer": "building", minzoom: 13,
+    paint: {
+      "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+      "fill-extrusion-opacity": state.layer === "sat" ? 0.85 : 0.92,
+    },
+  }, firstSymbol ? firstSymbol.id : undefined);
+  applyBuildings();
+}
+function applyBuildings() {
+  if (!map.getLayer(BLD)) return;
+  const h = ["coalesce", ["get", "render_height"], ["get", "height"], 10];
+  const normal = state.layer === "sat" ? "#d9d4cb" : "#30343b";
+  if (bldReach === null || !state.detonated) {
+    map.setPaintProperty(BLD, "fill-extrusion-height", h);
+    map.setPaintProperty(BLD, "fill-extrusion-color", normal);
+    return;
+  }
+  const r = {}; EFFECTS.forEach(e => r[e.id] = e.r(state.kt, state.burst) * 1000);
+  const conv = state.type === "conv";
+  const outer = conv ? r.glass : Math.max(r.light, r.thermal);
+  const d = ["distance", { type: "Point", coordinates: state.target }];
+  const R = Math.min(bldReach, outer * 1.01);
+  map.setPaintProperty(BLD, "fill-extrusion-height", ["*", h,
+    ["case", [">", d, R], 1, ["<", d, r.heavy], 0.03, ["<", d, r.moderate], 0.3, ["<", d, r.light], 0.8, 1]]);
+  map.setPaintProperty(BLD, "fill-extrusion-color",
+    ["case", [">", d, R], normal,
+      ["<", d, r.fireball], "#120e0c",
+      ["<", d, r.heavy], "#1f1a17",
+      ["<", d, r.moderate], "#3d2f27",
+      ...(conv ? [] : [["<", d, r.thermal], "#55361f"]),
+      ["<", d, r.light], "#5c534c",
+      ...(conv ? [["<", d, r.glass], "#4d5960"] : []),
+      normal]);
+}
+let bldLast = 0;
+function updateBuildingsDuringBoom(now) {
+  if (!map.getLayer(BLD) || bldReach === null) return;
+  if (now - bldLast < 140) return;
+  bldLast = now;
+  const R = revealRadius(now);
+  const m = R === Infinity ? 1e9 : R * 1000;
+  if (m !== bldReach) { bldReach = m; applyBuildings(); }
+}
 map.on("error", e => console.warn("Kartenfehler", e && e.error));
 
 const P = ll => { const p = map.project(ll); return [p.x, p.y]; };
@@ -488,6 +544,7 @@ function drawFx() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, W, H);
   const now = performance.now();
+  if (state.boom) updateBuildingsDuringBoom(now);
   drawDestruction(now);
   drawEffects(now);
   if (state.boom) drawExplosion(now);
@@ -772,7 +829,7 @@ function drawExplosion(now) {
   $("tval").textContent = "T + " + fmtSec(Math.max(0.1, tPhysNow));
   $("tphase").textContent = phase;
   if (el > TL.shockStart + TL.shockDur && casResult && !b.shown) { b.shown = true; const keep = state.boom; state.boom = null; showEstimate(); state.boom = keep; }
-  if (el > TL.end) { state.boom = null; $("tphase").textContent = "Druckwelle erreicht 1 psi nach " + fmtSec(b.tPhys.light); if (!b.shown) showEstimate(); }
+  if (el > TL.end) { state.boom = null; bldReach = 1e9; applyBuildings(); $("tphase").textContent = "Druckwelle erreicht 1 psi nach " + fmtSec(b.tPhys.light); if (!b.shown) showEstimate(); }
 }
 
 /* Feuerball einer chemischen Explosion: kurz, orange-gelb, unruhig, geht schnell in Rauch über */
@@ -980,6 +1037,7 @@ let dragging = false, justDragged = 0;
 function nearTarget(pt) { if (!state.target) return false; const [x, y] = P(state.target); return Math.hypot(pt.x - x, pt.y - y) < 30; }
 function clearDetonation() {
   boomToken++; state.detonated = false; state.boom = null; state.destroy = null; shakes = []; $("stage").style.transform = "";
+  bldReach = null; applyBuildings();
   $("timer").classList.remove("show");
   $("hint").textContent = "„Zünden“ startet die Explosion.";
   casToken++; casResult = null; $("cas").hidden = true;
@@ -1024,6 +1082,7 @@ function detonate() {
   state.boom = null;
   state.detonated = true;
   state.destroy = makeDestroy();
+  bldReach = reduceMotion ? 1e9 : 0; applyBuildings();
   runEstimate();
   $("hint").textContent = "Fadenkreuz ziehen oder auf die Karte tippen, um das Ziel zu verschieben";
   if (!reduceMotion) {
@@ -1187,6 +1246,7 @@ resizeFx();
 window.addEventListener("resize", resizeFx);
 setYield(15);
 state.destroy = makeDestroy();
+bldReach = 1e9;
 map.jumpTo({ center: state.target, zoom: zoomFor(VIEW.still) });
 map.once("load", () => { map.jumpTo({ center: state.target, zoom: zoomFor(VIEW.still) }); schedule(); });
 $("hint").textContent = "Beispiel: Hiroshima-Bombe über Berlin. „Zünden“ spielt die Explosion ab.";
