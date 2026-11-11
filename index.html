@@ -344,13 +344,11 @@ const PRESETS = [
   { name: "Smiling Buddha", kt: 8, country: "Indien", year: "1974", note: "Erster indischer Test, Pokhran. Offiziell 12 kt, Schätzungen liegen niedriger." },
   { name: "6. Kernwaffentest", kt: 250, country: "Nordkorea", year: "2017", note: "Stärkster nordkoreanischer Test, Punggye-ri. Schätzung, die Angaben reichen von etwa 50 bis 300 kt." },
   // Geplant, nie gebaut oder nie in voller Stärke gezündet
-  { name: "Sundial", kt: 1e7, country: "USA", year: "1954", group: "Geplant / nie gebaut", note: "Entwurf von Edward Teller, nie gebaut. Bei dieser Größe gelten die üblichen Skalierungsgesetze nicht mehr, die Radien sind nur eine grobe Hochrechnung." },
-  { name: "Gnomon", kt: 1e6, country: "USA", year: "1954", group: "Geplant / nie gebaut", note: "Sollte als Zündstufe für Sundial dienen. Ein Prototyp-Test war für 1956 geplant, fand aber nie statt. Radien nur grobe Hochrechnung." },
-  { name: "Zar-Bombe in voller Stärke", kt: 100000, country: "Sowjetunion", year: "1961", group: "Geplant / nie gebaut", note: "Ausgelegt auf 100 Mt, gezündet wurde aber nur die halbe Stärke." },
-  { name: "T-15-Torpedo", kt: 100000, country: "Sowjetunion", year: "1950er", group: "Geplant / nie gebaut", note: "Riesentorpedo gegen Häfen, 1954 eingestellt. Die oft genannten 100 Mt sind umstritten, möglicherweise war nur ein Sprengkopf von wenigen Megatonnen vorgesehen." },
-  { name: "Poseidon, westliche Schätzung", kt: 2000, country: "Russland", year: "in Entwicklung", group: "Geplant / nie gebaut", note: "Atomgetriebene Unterwasserdrohne (Status-6). Fachleute schätzen den Sprengkopf auf etwa 2 Mt." },
-  { name: "Poseidon, russische Behauptung", kt: 100000, country: "Russland", year: "in Entwicklung", group: "Geplant / nie gebaut", note: "Im russischen Staatsfernsehen genannte 100 Mt. Fachleute halten das für unrealistisch." },
-  /* Fiktive Waffen bekommen später assumed: true, wenn das Werk keine Sprengkraft nennt. */
+  { name: "Sundial", kt: 1e7, country: "USA", year: "1954", group: "Nie produziert oder fiktiv", special: true, note: "Entwurf von Edward Teller, nie gebaut. Bei dieser Größe gelten die üblichen Skalierungsgesetze nicht mehr, die Radien sind nur eine grobe Hochrechnung." },
+  { name: "Gnomon", kt: 1e6, country: "USA", year: "1954", group: "Nie produziert oder fiktiv", special: true, note: "Sollte als Zündstufe für Sundial dienen. Ein Prototyp-Test war für 1956 geplant, fand aber nie statt. Radien nur grobe Hochrechnung." },
+  { name: "Zar-Bombe in voller Stärke", kt: 100000, country: "Sowjetunion", year: "1961", group: "Nie produziert oder fiktiv", special: true, note: "Ausgelegt auf 100 Mt, gezündet wurde aber nur die halbe Stärke." },
+  { name: "T-15-Torpedo", kt: 100000, country: "Sowjetunion", year: "1950er", group: "Nie produziert oder fiktiv", special: true, note: "Riesentorpedo gegen Häfen, 1954 eingestellt. Die oft genannten 100 Mt sind umstritten, möglicherweise war nur ein Sprengkopf von wenigen Megatonnen vorgesehen." },
+  /* Fiktive Waffen: origin = Werk und Gattung, z. B. "Film: Terminator 2"; assumed: true, wenn das Werk keine Sprengkraft nennt. */
 ];
 
 
@@ -868,7 +866,7 @@ let weaponIdx = PRESETS.findIndex(p => p.name === "Little Boy");
   PRESETS.forEach((p, i) => { const key = p.group || p.country; let g = groups.find(g => g.c === key); if (!g) groups.push(g = { c: key, items: [] }); g.items.push(i); });
   groups.forEach(g => g.items.sort((a, b) => PRESETS[a].kt - PRESETS[b].kt)); // innerhalb eines Landes nach Sprengkraft
   $("weapon").innerHTML = `<option value="-1">Eigene Sprengkraft</option>` + groups.map(g =>
-    `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].year}) · ${PRESETS[i].assumed ? "ca. " : ""}${fmtYield(PRESETS[i].kt)}${PRESETS[i].assumed ? " (angenommen)" : ""}</option>`).join("")}</optgroup>`).join("");
+    `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].special ? (PRESETS[i].origin || PRESETS[i].country) : PRESETS[i].year}) · ${PRESETS[i].assumed ? "ca. " : ""}${fmtYield(PRESETS[i].kt)}${PRESETS[i].assumed ? " (angenommen)" : ""}</option>`).join("")}</optgroup>`).join("");
 })();
 function syncWeapon() {
   if (weaponIdx >= 0 && Math.abs(PRESETS[weaponIdx].kt - state.kt) > 1e-6) weaponIdx = -1;
