@@ -618,8 +618,8 @@ function drawDestruction(now) {
     if (d.conv && f.r > Rl) continue;
     const [x, y] = P(offsetLL(state.target, Math.cos(f.a) * f.r, Math.sin(f.a) * f.r));
     const fl = 0.55 + 0.3 * Math.sin(t * f.f + f.ph) + 0.15 * Math.sin(t * f.f * 2.3 + f.ph * 2);
-    const sz = Math.min(26, Math.max(5, d.fireR * 0.035 * f.s * pxkm));
-    puff(x, y, sz * 2.2, "255,110,30", 0.18 * fl);
+    const sz = Math.min(11, Math.max(4, d.fireR * 0.02 * f.s * pxkm));
+    puff(x, y, sz * 1.8, "255,110,30", 0.16 * fl);
     puff(x, y - sz * 0.3 * side, sz, "255,190,90", 0.55 * fl);
   }
   ctx.globalCompositeOperation = "source-over";
@@ -681,7 +681,8 @@ function startBoom() {
                  smoke: conv ? state.smoke : "nuc", thermo: conv && state.thermo,
                  rCloud: conv ? cloudRadiusConvKm(W0) : cloudRadiusKm(W0) * (state.burst === "surface" ? 0.85 : 1) };
   // Kamera: nie hineinzoomen, nur herausfahren, wenn man näher dran ist als die Gesamtansicht
-  const zWide = zoomFor(conv ? VIEW.still : VIEW.wide);
+  let zWide = zoomFor(conv ? VIEW.still : VIEW.wide);
+  if (map.getPitch() > 20 && map.getLayer(BLD)) zWide = Math.max(zWide, 13.4); // in 3D nah genug bleiben, damit die Gebäude sichtbar sind
   if (map.getZoom() > zWide + 0.05) map.easeTo({ center: state.target, zoom: zWide, duration: conv ? 3800 : 5600, easing: t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2 });
   shake(conv ? 7 : 5, 0);
   buzz(conv ? [140, 40, 120] : [90, 50, 220]);
