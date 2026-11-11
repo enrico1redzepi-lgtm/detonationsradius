@@ -1,4 +1,4 @@
-# BlastAtlas
+# BlastSimulator
 
 Interactive blast map: pick a weapon and a location and see the effect zones (fireball, blast, thermal and initial radiation), an animated explosion with damage and fires, and an estimate of casualties based on real population data.
 

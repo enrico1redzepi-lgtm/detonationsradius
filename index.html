@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>BlastAtlas – Nuclear and conventional blast simulator</title>
+<title>BlastSimulator – Nuclear &amp; conventional explosion map</title>
 <meta name="description" content="Interactive blast map: see the effect zones, explosion and estimated casualties of nuclear weapons, conventional bombs and fictional scenarios anywhere in the world.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="BlastAtlas">
+<meta property="og:title" content="BlastSimulator">
 <meta property="og:description" content="Pick a weapon and a place and see what an explosion there would do.">
 <meta property="og:url" content="https://blastsimulator.com/">
 <meta property="og:image" content="https://blastsimulator.com/og.jpg">
@@ -16,7 +16,7 @@
 <link rel="canonical" href="https://blastsimulator.com/">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#0b0c0e">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"BlastAtlas","url":"https://blastsimulator.com/","applicationCategory":"EducationalApplication","operatingSystem":"Any","description":"Interactive blast map showing effect zones, explosion and estimated casualties of nuclear weapons, conventional bombs and fictional scenarios.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"BlastSimulator","url":"https://blastsimulator.com/","applicationCategory":"EducationalApplication","operatingSystem":"Any","description":"Interactive blast map showing effect zones, explosion and estimated casualties of nuclear weapons, conventional bombs and fictional scenarios.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
 <link href="vendor/maplibre-gl-5.24.0/maplibre-gl.css" rel="stylesheet">
 <style>
 /* Schriften lokal (SIL Open Font License, siehe fonts/OFL-Geist.txt) – kein Abruf bei Google */
@@ -233,7 +233,7 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
 <dialog class="sources" id="sources" aria-labelledby="srcTitle">
   <div class="src-head"><h2 id="srcTitle">Sources &amp; methodology</h2><button class="src-close" id="closeSources" aria-label="Close">×</button></div>
   <div class="src-body">
-    <p class="src-note">BlastAtlas is a simulation for illustration. All values are approximations; weather, terrain, buildings, time of day and warning time change the real-world consequences considerably.</p>
+    <p class="src-note">BlastSimulator is a simulation for illustration. All values are approximations; weather, terrain, buildings, time of day and warning time change the real-world consequences considerably.</p>
 
     <h3>Maps and place data</h3>
     <ul>
@@ -327,7 +327,7 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
   <aside class="panel" id="panel">
     <button class="grip" id="grip" aria-label="Expand or collapse controls"><span></span></button>
     <header>
-      <h1>BlastAtlas</h1>
+      <h1>BlastSimulator</h1>
       <p>See what an explosion would do, anywhere on Earth</p>
     </header>
 
@@ -1537,7 +1537,7 @@ $("share").addEventListener("click", async () => {
   const p = PRESETS[weaponIdx], where = nearestPlace();
   const text = `${p ? p.name : (state.type === "conv" ? "Explosion" : "Nuclear bomb")} (${fmtYield(state.kt)})${where ? " over " + where : ""}`;
   if (navigator.share && isPhone()) {
-    try { await navigator.share({ title: "BlastAtlas", text, url }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+    try { await navigator.share({ title: "BlastSimulator", text, url }); return; } catch (e) { if (e && e.name === "AbortError") return; }
   }
   try { await navigator.clipboard.writeText(url); toast("Link copied"); }
   catch (e) { toast("The link is now in the address bar"); }
