@@ -562,7 +562,7 @@ function makeDestroy() {
   const R = Math.random;
   const fireR = conv ? rad.moderate : Math.min(rad.thermal, rad.light * 1.1);
   const fires = [], smoke = [], rubble = [], blotches = [];
-  for (let i = 0; i < 120; i++) fires.push({ r: fireR * Math.pow(R(), 0.75), a: R() * 6.283, s: 0.6 + R() * 0.8, ph: R() * 6.283, f: 3 + R() * 5 });
+  for (let i = 0; i < 90; i++) fires.push({ r: fireR * Math.pow(R(), 0.75), a: R() * 6.283, s: 0.6 + R() * 0.8, ph: R() * 6.283, f: 3 + R() * 5 });
   for (let i = 0; i < 22; i++) smoke.push({ i: (R() * fires.length) | 0, ph: R(), s: 0.7 + R() * 0.8 });
   for (let i = 0; i < 380; i++) rubble.push({ r: rad.moderate * Math.sqrt(R()), a: R() * 6.283, w: 1 + R() * 2.2, h: 1 + R() * 1.6, c: R() });
   for (let i = 0; i < 46; i++) blotches.push({ r: rad.heavy * 1.6 * Math.sqrt(R()), a: R() * 6.283, s: 0.15 + R() * 0.3 });
@@ -613,24 +613,54 @@ function drawDestruction(now) {
   const fireOn = d.conv ? true : el > 300;
   if (!fireOn) return;
   const t = now / 1000;
+  // Rauch zuerst, damit die Flammen davor leuchten: mehrere Schwaden pro Quelle, vom Wind verweht
+  for (const sm of d.smoke) {
+    const f = d.fires[sm.i]; if (d.conv && f.r > Rl) continue;
+    const [fx, fy] = P(offsetLL(state.target, Math.cos(f.a) * f.r, Math.sin(f.a) * f.r));
+    const base = Math.min(40, Math.max(6, d.fireR * 0.03 * sm.s * pxkm));
+    for (let k = 0; k < 4; k++) {
+      const ph = (t * 0.09 + sm.ph + k / 4) % 1;
+      const dx = base * (1.5 + 6 * ph), dy = base * 0.6 * ph;
+      const up = base * 7 * ph * side;
+      puff(fx + dx, fy + dy - up, base * (0.7 + 1.8 * ph), ph < 0.25 ? "52,44,40" : "34,31,30", 0.3 * (1 - ph) * Math.min(1, ph * 6));
+    }
+  }
+  // Flammen: mehrere züngelnde Flammen je Brandherd, unten gelb-weiß, oben dunkelrot
   ctx.globalCompositeOperation = "lighter";
+  const lift = 0.45 + 0.85 * side;                     // in der Draufsicht kurze, in 3D hohe Flammen
   for (const f of d.fires) {
     if (d.conv && f.r > Rl) continue;
     const [x, y] = P(offsetLL(state.target, Math.cos(f.a) * f.r, Math.sin(f.a) * f.r));
-    const fl = 0.55 + 0.3 * Math.sin(t * f.f + f.ph) + 0.15 * Math.sin(t * f.f * 2.3 + f.ph * 2);
-    const sz = Math.min(11, Math.max(4, d.fireR * 0.02 * f.s * pxkm));
-    puff(x, y, sz * 1.8, "255,110,30", 0.16 * fl);
-    puff(x, y - sz * 0.3 * side, sz, "255,190,90", 0.55 * fl);
+    const sz = Math.min(12, Math.max(4, d.fireR * 0.02 * f.s * pxkm));
+    puff(x, y, sz * 1.6, "255,90,20", 0.13 + 0.05 * Math.sin(t * f.f + f.ph));       // Glut am Boden
+    const n = 3 + (f.f | 0) % 3;
+    for (let j = 0; j < n; j++) {
+      const flick = 0.75 + 0.25 * Math.sin(t * (f.f * 1.7 + j) + f.ph * 3 + j) + 0.12 * Math.sin(t * 13.1 + j * 2.1 + f.ph);
+      const w = sz * (0.32 + 0.08 * ((j * 7) % 3));
+      const h = sz * (1.1 + 0.6 * ((j * 5) % 3) / 2) * flick * lift;
+      const bx = x + (j - (n - 1) / 2) * sz * 0.38, by = y + ((j * 3) % 2) * sz * 0.15;
+      const sway = Math.sin(t * (3 + j) + f.ph + j) * w * 0.7;
+      const g = ctx.createLinearGradient(bx, by, bx, by - h);
+      g.addColorStop(0, "rgba(255,236,170,0.85)");
+      g.addColorStop(0.3, "rgba(255,165,40,0.75)");
+      g.addColorStop(0.7, "rgba(215,60,12,0.45)");
+      g.addColorStop(1, "rgba(120,20,0,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(bx - w, by);
+      ctx.quadraticCurveTo(bx - w * 1.05, by - h * 0.45, bx + sway, by - h);
+      ctx.quadraticCurveTo(bx + w * 1.05, by - h * 0.45, bx + w, by);
+      ctx.closePath(); ctx.fill();
+    }
+    // aufsteigende Funken
+    for (let k = 0; k < 2; k++) {
+      const ph = (t * (0.6 + 0.2 * k) + f.ph + k * 0.5) % 1;
+      const ex = x + Math.sin(f.ph * 7 + k * 3 + ph * 4) * sz * 0.8, ey = y - ph * sz * 3.2 * lift;
+      ctx.fillStyle = `rgba(255,${Math.round(200 - 120 * ph)},60,${0.9 * (1 - ph)})`;
+      ctx.fillRect(ex, ey, 1.6, 1.6);
+    }
   }
   ctx.globalCompositeOperation = "source-over";
-  for (const sm of d.smoke) {
-    const f = d.fires[sm.i]; if (d.conv && f.r > Rl) continue;
-    const ph = (t * 0.12 + sm.ph) % 1;
-    const drift = d.fireR * 0.12 * ph;
-    const [x, y] = P(offsetLL(state.target, Math.cos(f.a) * f.r + drift, Math.sin(f.a) * f.r + drift * 0.3));
-    const sz = Math.min(60, Math.max(5, d.fireR * 0.05 * sm.s * pxkm)) * (0.6 + ph);
-    puff(x, y - ph * sz * 3 * side, sz, "38,34,32", 0.32 * (1 - ph) * Math.min(1, ph * 5));
-  }
 }
 
 /* Zeitplan der Animation in Millisekunden (zusammengerafft, die Anzeige zeigt die echte Zeit) */
