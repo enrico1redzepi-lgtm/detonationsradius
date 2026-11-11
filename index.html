@@ -26,6 +26,7 @@
   --fx-moderate: #ff8a3d;
   --fx-thermal: #ffb627;
   --fx-light: #8fa3ff;
+  --fx-glass: #7fd0e8;
   --display: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --body: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Geist Mono", ui-monospace, Menlo, monospace;
@@ -237,6 +238,14 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
     </div>
 
     <div class="field">
+      <span class="label">Art</span>
+      <div class="seg" id="kind">
+        <button data-v="nuc" class="on">Nuklear</button>
+        <button data-v="conv">Konventionell</button>
+      </div>
+    </div>
+
+    <div class="field" id="burstField">
       <span class="label">Detonation</span>
       <div class="seg" id="burst">
         <button data-v="air" class="on">In der Luft</button>
@@ -268,7 +277,7 @@ const STYLES = {
 };
 
 /* ---------- Wirkungsmodell (W in Kilotonnen, Radien in km) ---------- */
-const EFFECTS = [
+const EFFECTS_NUC = [
   { id: "fireball", name: "Feuerball", unit: "", color: "--fx-fireball",
     r: (W, b) => 0.07 * Math.pow(W, 0.4) * (b === "surface" ? 1.26 : 1),
     desc: b => b === "surface" ? "Alles im Feuerball verdampft. Am Boden entsteht ein Krater, der Boden wird stark radioaktiv." : "Alles im Feuerball verdampft. Bei optimaler Höhe berührt er den Boden meist nicht." },
@@ -293,7 +302,31 @@ const burstHeightKm = W => 0.24 * Math.cbrt(W); // für 5 psi optimiert (Hiroshi
    jede Stufe ergibt einen größeren Pilz; das Wachstum folgt der Kubikwurzel. */
 const mushroomKt = W => W < 5 ? W : Math.ceil(W / 5) * 5;
 const cloudRadiusKm = W => Math.pow(mushroomKt(W), 0.36); // 15 kt ≈ 2,6 km, 1 Mt ≈ 12 km, 50 Mt ≈ 49 km
-const BLAST = { heavy: 1, moderate: 0.65, light: 0.35 }; // Stärke für Wackeln/Vibration
+/* Konventionelle Explosionen: W = TNT-Äquivalent in kt, bodennahe Detonation (Halbkugel).
+   Druck-Abstände nach den üblichen TNT-Skalierungskurven (Kingery-Bulmash), in km pro kt^(1/3).
+   Feuerball: Durchmesser ≈ 3,86 · m^0,32 m (m in kg TNT). */
+const EFFECTS_CONV = [
+  { id: "fireball", name: "Feuerball", unit: "", color: "--fx-fireball",
+    r: W => 0.161 * Math.pow(W, 0.32) * (state.thermo ? 1.8 : 1),
+    desc: () => state.thermo ? "Thermobarische Waffe: Die Treibstoffwolke verbrennt in einem großen Feuerball und verbraucht den Sauerstoff." : "Flammen und Hitze im Feuerball sind für fast alle tödlich, dazu kommen Trümmer und Splitter." },
+  { id: "heavy", name: "Schwere Druckwelle", unit: "20 psi · 1,4 bar", color: "--fx-heavy",
+    r: W => 0.28 * Math.cbrt(W),
+    desc: () => "Gebäude werden zerstört oder bis auf das Gerippe abgedeckt. Kaum jemand überlebt." },
+  { id: "moderate", name: "Mittlere Druckwelle", unit: "5 psi · 0,34 bar", color: "--fx-moderate",
+    r: W => 0.55 * Math.cbrt(W),
+    desc: () => "Wohnhäuser stürzen ein oder werden schwer beschädigt. Viele Tote und Schwerverletzte." },
+  { id: "light", name: "Leichte Druckwelle", unit: "1 psi · 0,07 bar", color: "--fx-light",
+    r: W => 1.79 * Math.cbrt(W),
+    desc: () => "Fenster, Türen und Zwischenwände werden herausgerissen. Viele Verletzte durch Glas und Trümmer." },
+  { id: "glass", name: "Glasbruch", unit: "0,5 psi · 0,03 bar", color: "--fx-glass",
+    r: W => 3.2 * Math.cbrt(W),
+    desc: () => "Fensterscheiben bersten. Je nach Wetter reicht der Glasbruch noch deutlich weiter, in Beirut bis etwa 10 km." },
+];
+let EFFECTS = EFFECTS_NUC;
+const BLAST_NUC = { heavy: 1, moderate: 0.65, light: 0.35 }; // Stärke für Wackeln/Vibration
+const BLAST_CONV = { heavy: 1, moderate: 0.65, light: 0.35, glass: 0.18 };
+let BLAST = BLAST_NUC;
+const cloudRadiusConvKm = W => 0.5 * Math.cbrt(W) * (state.thermo ? 1.3 : 1); // Beirut (≈1 kt): Wolke rund 1 km breit
 
 /* Ankunftszeit der Druckwelle: Tabelle für 1 kt, skaliert mit W^(1/3) für Weg und Zeit.
    Nahe am Feuerball ist die Front deutlich schneller als der Schall, weiter draußen ≈ 340 m/s. */
@@ -343,6 +376,15 @@ const PRESETS = [
   { name: "Projekt 596", kt: 22, country: "China", year: "1964", note: "Erster chinesischer Kernwaffentest, Lop Nur." },
   { name: "Smiling Buddha", kt: 8, country: "Indien", year: "1974", note: "Erster indischer Test, Pokhran. Offiziell 12 kt, Schätzungen liegen niedriger." },
   { name: "6. Kernwaffentest", kt: 250, country: "Nordkorea", year: "2017", note: "Stärkster nordkoreanischer Test, Punggye-ri. Schätzung, die Angaben reichen von etwa 50 bis 300 kt." },
+  // Konventionelle (chemische) Explosionen, Sprengkraft als TNT-Äquivalent
+  { name: "Tomahawk-Marschflugkörper", kt: 0.0005, type: "conv", smoke: "dark", country: "USA", year: "seit 1983", note: "Sprengkopf entspricht etwa 500 kg TNT." },
+  { name: "GBU-43/B MOAB", kt: 0.011, type: "conv", smoke: "dark", country: "USA", year: "2003", note: "„Mother of All Bombs“, größte konventionelle Bombe der USA. 2017 erstmals in Afghanistan eingesetzt." },
+  { name: "ATBIP „Vater aller Bomben“", kt: 0.044, type: "conv", smoke: "dark", thermo: true, group: "Sowjetunion / Russland", country: "Russland", year: "2007", note: "Thermobarische Bombe. Die 44 t TNT sind eine russische Angabe und unabhängig nicht bestätigt." },
+  { name: "Explosion im Hafen von Tianjin", kt: 0.3, type: "conv", smoke: "dark", approx: true, country: "China", year: "2015", note: "Chemikalienlager, 173 Tote. Schätzungen für die zweite, große Explosion reichen von 21 t (seismisch) bis 500 t TNT." },
+  { name: "Explosion im Hafen von Beirut", kt: 1, type: "conv", smoke: "nitrate", country: "Libanon", year: "2020", note: "Rund 2.750 t Ammoniumnitrat explodierten, über 200 Tote und mehr als 6.000 Verletzte. Studien schätzen 0,5 bis 1,4 kt TNT." },
+  { name: "Halifax-Explosion", kt: 2.9, type: "conv", smoke: "white", country: "Kanada", year: "1917", note: "Ein Munitionsfrachter explodierte nach einer Kollision im Hafen, rund 2.000 Tote. Größte menschengemachte Explosion vor der Atombombe." },
+  { name: "Sprengung von Helgoland („Big Bang“)", kt: 3.2, type: "conv", smoke: "white", country: "Großbritannien", year: "1947", note: "Die Royal Navy sprengte rund 6.700 t Weltkriegsmunition auf der deutschen Insel." },
+  { name: "Minor Scale", kt: 4, type: "conv", smoke: "white", country: "USA", year: "1985", note: "Größte geplante konventionelle Sprengung: 4.744 t ANFO, um die Druckwelle einer Atomexplosion nachzubilden." },
   // Geplant, nie gebaut oder nie in voller Stärke gezündet
   { name: "Sundial", kt: 1e7, country: "USA", year: "1954", group: "Nie produziert oder fiktiv", special: true, note: "Entwurf von Edward Teller, nie gebaut. Bei dieser Größe gelten die üblichen Skalierungsgesetze nicht mehr, die Radien sind nur eine grobe Hochrechnung." },
   { name: "Gnomon", kt: 1e6, country: "USA", year: "1954", group: "Nie produziert oder fiktiv", special: true, note: "Sollte als Zündstufe für Sundial dienen. Ein Prototyp-Test war für 1956 geplant, fand aber nie statt. Radien nur grobe Hochrechnung." },
@@ -363,7 +405,7 @@ const PRESETS = [
 
 
 /* ---------- Zustand und Hilfsfunktionen ---------- */
-const state = { kt: 15, burst: "air", target: [13.4132, 52.5219], detonated: true, boom: null, layer: "map" };
+const state = { kt: 15, burst: "air", target: [13.4132, 52.5219], detonated: true, boom: null, layer: "map", type: "nuc", smoke: "dark", thermo: false };
 const $ = id => document.getElementById(id);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const nf = (v, d) => v.toLocaleString("de-DE", { maximumFractionDigits: d, minimumFractionDigits: d });
@@ -454,7 +496,9 @@ function drawFx() {
 }
 
 /* Zeitplan der Animation in Millisekunden (zusammengerafft, die Anzeige zeigt die echte Zeit) */
-const TL = { shockStart: 250, shockDur: 3800, cloudStart: 450, cloudGrow: 4600, fadeStart: 6600, end: 9200 };
+const TL_NUC = { shockStart: 250, shockDur: 3800, cloudStart: 450, cloudGrow: 4600, fadeStart: 6600, end: 9200, fireZone: 3800, rise: 1.7 };
+const TL_CONV = { shockStart: 120, shockDur: 2600, cloudStart: 200, cloudGrow: 3400, fadeStart: 5200, end: 7600, fireZone: 1600, rise: 1.25 };
+let TL = TL_NUC;
 
 function drawEffects(now) {
   if (!state.target || !state.detonated) return;
@@ -463,7 +507,7 @@ function drawEffects(now) {
   for (const e of list) {
     let a = 1, extra = 0;
     if (b) {
-      if (e.id === "fireball") a = clamp01((el - 3800) / 1200);
+      if (e.id === "fireball") a = clamp01((el - TL.fireZone) / 1000);
       else if (e.id === "thermal" || e.id === "rad") { a = clamp01(el / 350); if (e.id === "thermal") extra = 0.4 * Math.exp(-el / 700); }
       else a = clamp01((el - b.hitAt[e.id]) / 220);
     }
@@ -477,9 +521,11 @@ function drawEffects(now) {
 }
 
 function startBoom() {
+  const conv = state.type === "conv";
+  TL = conv ? TL_CONV : TL_NUC;
   const W0 = state.kt, radii = {};
   EFFECTS.forEach(e => radii[e.id] = e.r(W0, state.burst));
-  const rFront = radii.light * 1.04;
+  const rFront = Math.max(...Object.keys(BLAST).map(id => radii[id])) * 1.04;
   const tMax = shockTime(rFront, W0);
   const hitAt = {}, tPhys = {};
   for (const id of Object.keys(BLAST)) { tPhys[id] = shockTime(radii[id], W0); hitAt[id] = TL.shockStart + tPhys[id] / tMax * TL.shockDur; }
@@ -488,15 +534,18 @@ function startBoom() {
   for (let i = 0; i < 110; i++) { const a = R() * 6.283, r = Math.sqrt(R()); parts.push({ k: "cap", x: Math.cos(a) * r, y: Math.sin(a) * r, s: 0.28 + R() * 0.25, ph: R() * 6.283, sh: R() }); }
   for (let i = 0; i < 45; i++) parts.push({ k: "stem", t: R(), x: (R() - 0.5), s: 0.18 + R() * 0.14, ph: R() * 6.283, sh: R() });
   for (let i = 0; i < 30; i++) parts.push({ k: "base", x: (R() - 0.5) * 2, y: R(), s: 0.2 + R() * 0.2, ph: R() * 6.283, sh: R() });
+  const debris = [];
+  if (conv) for (let i = 0; i < 110; i++) debris.push({ a: R() * 6.283, v: 0.35 + R() * 0.9, up: 0.3 + R() * 0.9, s: 1 + R() * 2.2, hot: R() < 0.55 });
   const dust = [];
-  if (state.burst === "surface") for (let i = 0; i < 70; i++) dust.push({ a: Math.random() * 6.283, d: 0.9 + Math.random() * 0.7, s: 0.2 + Math.random() * 0.25, sh: Math.random() });
-  state.boom = { t0: performance.now(), W: W0, radii, rFront, tMax, hitAt, tPhys, fired: {}, parts, dust,
-                 rCloud: cloudRadiusKm(W0) * (state.burst === "surface" ? 0.85 : 1) };
+  if (state.burst === "surface" || conv) for (let i = 0; i < 70; i++) dust.push({ a: Math.random() * 6.283, d: 0.9 + Math.random() * 0.7, s: 0.2 + Math.random() * 0.25, sh: Math.random() });
+  state.boom = { t0: performance.now(), W: W0, radii, rFront, tMax, hitAt, tPhys, fired: {}, parts, dust, debris, conv,
+                 smoke: conv ? state.smoke : "nuc", thermo: conv && state.thermo,
+                 rCloud: conv ? cloudRadiusConvKm(W0) : cloudRadiusKm(W0) * (state.burst === "surface" ? 0.85 : 1) };
   // Kamera: nie hineinzoomen, nur herausfahren, wenn man näher dran ist als die Gesamtansicht
-  const zWide = zoomFor(VIEW.wide);
-  if (map.getZoom() > zWide + 0.05) map.easeTo({ center: state.target, zoom: zWide, duration: 5600, easing: t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2 });
-  shake(5, 0);
-  buzz([90, 50, 220]);
+  const zWide = zoomFor(conv ? VIEW.still : VIEW.wide);
+  if (map.getZoom() > zWide + 0.05) map.easeTo({ center: state.target, zoom: zWide, duration: conv ? 3800 : 5600, easing: t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2 });
+  shake(conv ? 7 : 5, 0);
+  buzz(conv ? [140, 40, 120] : [90, 50, 220]);
   $("timer").classList.add("show");
 }
 
@@ -522,6 +571,15 @@ function drawExplosion(now) {
     ctx.fillStyle = `rgba(255,250,235,${0.14 * fade})`; ctx.fill("evenodd");
     ctx.beginPath(); ringPath(state.target, rKm);
     ctx.strokeStyle = `rgba(255,252,240,${0.95 * fade})`; ctx.lineWidth = 2.5; ctx.stroke();
+    /* Kondensationswolke (Wilson-Wolke): weiße Glocke hinter der Druckfront, typisch für große
+       konventionelle Explosionen bei feuchter Luft wie in Beirut. Verschwindet nach Sekundenbruchteilen. */
+    const cw = b.conv ? clamp01(1 - (el - TL.shockStart) / 900) : 0;
+    if (cw > 0) {
+      const rw = rKm * 0.92 * pxkm, [wx, wy] = P(state.target);
+      const g = ctx.createRadialGradient(wx, wy, rw * 0.15, wx, wy, rw);
+      g.addColorStop(0, `rgba(255,255,255,${0.10 * cw})`); g.addColorStop(0.75, `rgba(250,252,255,${0.42 * cw})`); g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(wx, wy, rw, 0, 6.283); ctx.fill();
+    }
   }
   for (const id of Object.keys(BLAST)) if (!b.fired[id] && el >= b.hitAt[id]) {
     b.fired[id] = true; shake(10 * BLAST[id], 0); buzz(Math.round(120 * BLAST[id])); thump(BLAST[id]);
@@ -543,14 +601,16 @@ function drawExplosion(now) {
   /* Atompilz: von oben gesehen eine runde Wolke, mit Neigung (3D) steht er auf */
   const side = clamp01(map.getPitch() / 60);          // 0 = Draufsicht, 1 = Seitenansicht
   const sCap = b.rCloud * pxkm;                       // Hut-Radius in Pixel (Endgröße)
-  const rise = sCap * 1.7 * cp * side;                // Höhe der Hutmitte auf dem Bildschirm
+  const rise = sCap * TL.rise * cp * side;            // Höhe der Hutmitte auf dem Bildschirm
   b.rise = rise;
   if (cA > 0) {
     const rx = sCap * (0.35 + 0.65 * cp), ry = rx * (1 - 0.5 * side);
     const capY = cy - rise;
-    const col = (sh, lift) => {                       // heiß orange -> grau, unten dunkler
-      const k = (1 - sh * 0.18) * (0.88 + 0.12 * lift);
-      return `${Math.round((255 * heat + 214 * (1 - heat)) * k)},${Math.round((165 * heat + 207 * (1 - heat)) * k)},${Math.round((90 * heat + 198 * (1 - heat)) * k)}`;
+    // Rauchfarbe: heiß orange -> Endfarbe je nach Art der Explosion, unten etwas dunkler
+    const END = { nuc: [214, 207, 198], dark: [58, 54, 52], nitrate: [176, 96, 58], white: [222, 220, 216] }[b.smoke] || [214, 207, 198];
+    const col = (sh, lift) => {
+      const k = (1 - sh * (b.smoke === "dark" ? 0.35 : 0.18)) * (0.88 + 0.12 * lift);
+      return `${Math.round((255 * heat + END[0] * (1 - heat)) * k)},${Math.round((165 * heat + END[1] * (1 - heat)) * k)},${Math.round((90 * heat + END[2] * (1 - heat)) * k)}`;
     };
     // Säule
     const stemTop = capY + ry * 0.4, stemLen = Math.max(0, cy - stemTop);
@@ -578,9 +638,26 @@ function drawExplosion(now) {
     }
   }
 
+  /* Trümmer und Funken (nur konventionell): fliegen nach außen, in 3D im Bogen nach oben */
+  if (b.conv) {
+    const tS = (el - 60) / 1000;
+    if (tS > 0 && tS < 2.4) {
+      const reach = Math.max(b.radii.moderate, b.radii.fireball * 2.2);
+      for (const d of b.debris) {
+        const dist = reach * d.v * (1 - Math.exp(-tS * 2.2));
+        const [gx, gy] = P(offsetLL(state.target, Math.cos(d.a) * dist, Math.sin(d.a) * dist));
+        const h = Math.max(0, d.up * reach * pxkm * (tS * 1.6 - tS * tS * 0.7)) * side;
+        const fade = clamp01(1 - tS / 2.4);
+        ctx.fillStyle = d.hot ? `rgba(255,${Math.round(150 + 80 * fade)},70,${0.9 * fade})` : `rgba(40,36,34,${0.8 * fade})`;
+        ctx.beginPath(); ctx.arc(gx, gy - h, d.s * (d.hot ? 1 : 1.3), 0, 6.283); ctx.fill();
+      }
+    }
+  }
+
   /* Feuerball und Lichtblitz (steigt mit dem Pilz auf) */
   const fy = cy - (b.rise || 0) * clamp01((el - 500) / 1500);
-  const life = el < 600 ? 1 : clamp01(1 - (el - 600) / 3200);
+  if (b.conv) drawConvFireball(cx, fy, el, pxkm, b);
+  const life = b.conv ? 0 : el < 600 ? 1 : clamp01(1 - (el - 600) / 3200);
   if (life > 0) {
     const R0 = b.radii.fireball * pxkm;
     const r = Math.max(5, R0 * (el < 450 ? easeOut(el / 450) : 1 + 0.3 * clamp01((el - 450) / 3000)));
@@ -605,15 +682,36 @@ function drawExplosion(now) {
 
   /* Zeitanzeige: echte Zeit seit der Detonation */
   let phase;
-  if (el < 300) phase = "Lichtblitz: Hitzestrahlung trifft sofort ein";
+  if (el < 300) phase = b.conv ? "Detonation" : "Lichtblitz: Hitzestrahlung trifft sofort ein";
   else if (ts < 1) {
     const passed = Object.keys(BLAST).filter(id => b.fired[id]);
     phase = passed.length ? EFFECTS.find(e => e.id === passed[passed.length - 1]).name + " durchläuft ihre Zone" : "Feuerball dehnt sich aus, Druckwelle läuft los";
-  } else phase = "Pilzwolke steigt auf";
+  } else phase = b.conv ? "Rauchwolke steigt auf" : "Pilzwolke steigt auf";
   $("tval").textContent = "T + " + fmtSec(Math.max(0.1, tPhysNow));
   $("tphase").textContent = phase;
   if (el > TL.shockStart + TL.shockDur && casResult && !b.shown) { b.shown = true; const keep = state.boom; state.boom = null; showEstimate(); state.boom = keep; }
   if (el > TL.end) { state.boom = null; $("tphase").textContent = "Druckwelle erreicht 1 psi nach " + fmtSec(b.tPhys.light); if (!b.shown) showEstimate(); }
+}
+
+/* Feuerball einer chemischen Explosion: kurz, orange-gelb, unruhig, geht schnell in Rauch über */
+function drawConvFireball(cx, fy, el, pxkm, b) {
+  const dur = b.thermo ? 2200 : 1500;
+  const life = clamp01(1 - (el - 150) / dur);
+  if (life <= 0) return;
+  const R0 = Math.max(6, b.radii.fireball * pxkm);
+  const grow = el < 260 ? easeOut(el / 260) : 1 + 0.15 * clamp01((el - 260) / dur);
+  const heat = clamp01(1 - el / (dur * 0.8));
+  ctx.globalCompositeOperation = "lighter";
+  const glow = Math.exp(-el / (b.thermo ? 420 : 220));
+  if (glow > 0.01) puff(cx, fy, R0 * 3.2 + 30, "255,170,90", 0.55 * glow);
+  for (let i = 0; i < 14; i++) {                       // unruhige Flammenballen
+    const a = i * 2.39996 + el * 0.0009, d = (0.15 + 0.5 * ((i * 37) % 10) / 10) * R0 * grow;
+    const x = cx + Math.cos(a) * d, y = fy + Math.sin(a) * d * 0.8;
+    const sz = R0 * grow * (0.45 + 0.25 * Math.sin(el * 0.013 + i));
+    puff(x, y, sz, `255,${Math.round(110 + 110 * heat)},${Math.round(30 + 60 * heat)}`, 0.5 * life);
+  }
+  puff(cx, fy, R0 * grow * 0.7, `255,${Math.round(200 + 50 * heat)},${Math.round(120 + 100 * heat)}`, 0.8 * life * heat);
+  ctx.globalCompositeOperation = "source-over";
 }
 
 function drawTarget() {
@@ -646,17 +744,17 @@ function audioInit() {
   if (muted) return;
   try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); } catch (e) { actx = null; }
 }
-function playBoom() {
+function playBoom(conv) {
   if (!actx || muted) return;
   const t = actx.currentTime, sr = actx.sampleRate;
   const vol = Math.max(0.45, Math.min(1, 0.55 + 0.1 * Math.log10(state.kt)));
   const out = actx.createGain(); out.gain.value = 0.85 * vol; out.connect(actx.destination);
   // Rumpeln: braunes Rauschen durch einen Tiefpass, der sich langsam schließt
-  const len = 6, buf = actx.createBuffer(1, sr * len, sr), d = buf.getChannelData(0);
+  const len = conv ? 4 : 6, buf = actx.createBuffer(1, sr * len, sr), d = buf.getChannelData(0);
   let last = 0; for (let i = 0; i < d.length; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
   const src = actx.createBufferSource(); src.buffer = buf;
-  const lp = actx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.setValueAtTime(1000, t); lp.frequency.exponentialRampToValueAtTime(80, t + 4.5);
-  const g = actx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + 0.03); g.gain.exponentialRampToValueAtTime(0.001, t + 5.8);
+  const lp = actx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.setValueAtTime(conv ? 2600 : 1000, t); lp.frequency.exponentialRampToValueAtTime(conv ? 140 : 80, t + (conv ? 2.6 : 4.5));
+  const g = actx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + 0.03); g.gain.exponentialRampToValueAtTime(0.001, t + (conv ? 3.6 : 5.8));
   src.connect(lp).connect(g).connect(out); src.start(t); src.stop(t + len);
   // Tiefer Schlag
   const o = actx.createOscillator(); o.type = "sine"; o.frequency.setValueAtTime(60, t); o.frequency.exponentialRampToValueAtTime(26, t + 2.2);
@@ -667,7 +765,7 @@ function playBoom() {
   for (let i = 0; i < cd.length; i++) cd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / cd.length, 3);
   const cs = actx.createBufferSource(); cs.buffer = cb;
   const hp = actx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 1200;
-  const cg = actx.createGain(); cg.gain.value = 0.35;
+  const cg = actx.createGain(); cg.gain.value = conv ? 0.75 : 0.35;
   cs.connect(hp).connect(cg).connect(out); cs.start(t);
 }
 function thump(strength) {
@@ -698,12 +796,14 @@ function loadPopTile(lat, lon) {
   }
   return popCache.get(key);
 }
-const PSI_PTS = { air: [[0.20, 20], [0.47, 5], [1.22, 1]], surface: [[0.17, 20], [0.36, 5], [0.92, 1]] };
+const PSI_PTS = { air: [[0.20, 20], [0.47, 5], [1.22, 1]], surface: [[0.17, 20], [0.36, 5], [0.92, 1]],
+                  conv: [[0.28, 20], [0.55, 5], [1.79, 1], [3.2, 0.5]] };
 function psiAt(dKm, W, burst) {
-  const s = Math.cbrt(W), pts = PSI_PTS[burst];
+  const s = Math.cbrt(W), pts = PSI_PTS[state.type === "conv" ? "conv" : burst];
   const x = Math.max(dKm / s, 1e-4);
-  let a = pts[0], b = pts[1];
-  if (x > pts[1][0]) { a = pts[1]; b = pts[2]; }
+  let i = 0;
+  while (i < pts.length - 2 && x > pts[i + 1][0]) i++;
+  const a = pts[i], b = pts[i + 1];
   const k = Math.log(b[1] / a[1]) / Math.log(b[0] / a[0]);
   return a[1] * Math.pow(x / a[0], k);
 }
@@ -716,7 +816,8 @@ function blastRates(psi) { // [Tote, Verletzte] nach OTA 1979
 }
 async function estimateCasualties(target, W, burst) {
   const rad = {}; EFFECTS.forEach(e => rad[e.id] = e.r(W, burst));
-  const R = Math.max(rad.light, rad.thermal, rad.rad);
+  const R = Math.max(...Object.values(rad));
+  const conv = state.type === "conv";
   const [lon0, lat0] = target;
   const kmLat = 110.57, kmLon = 111.32 * Math.cos(lat0 * Math.PI / 180);
   const dLat = R / kmLat, dLon = R / kmLon;
@@ -743,9 +844,15 @@ async function estimateCasualties(target, W, burst) {
           out.total += p;
           for (const e of EFFECTS) if (d <= rad[e.id]) out.inZone[e.id] += p;
           const [kb, ib] = blastRates(psiAt(d, W, burst));
-          const kr = d <= rad.rad ? 0.6 : 0, kt = d <= rad.thermal ? 0.15 : 0;
-          const kh = 1 - (1 - kb) * (1 - kr) * (1 - kt);
-          const ih = Math.min(1 - kh, ib + (d <= rad.thermal ? 0.2 : 0) + (d <= rad.rad ? 1 : 0));
+          let kh, ih;
+          if (conv) {                                   // obere Schätzung: Feuerball tödlich, Glassplitter
+            kh = d <= rad.fireball ? 1 : kb;
+            ih = Math.min(1 - kh, ib + (d > rad.light && d <= rad.glass ? 0.05 : 0));
+          } else {
+            const kr = d <= rad.rad ? 0.6 : 0, kt = d <= rad.thermal ? 0.15 : 0;
+            kh = 1 - (1 - kb) * (1 - kr) * (1 - kt);
+            ih = Math.min(1 - kh, ib + (d <= rad.thermal ? 0.2 : 0) + (d <= rad.rad ? 1 : 0));
+          }
           out.deadLo += p * kb; out.injLo += p * ib;
           out.deadHi += p * kh; out.injHi += p * ih;
         }
@@ -781,7 +888,7 @@ function showEstimate() {
     const range = (a, b) => fmtPeople(a) === fmtPeople(b) ? fmtPeople(a) : fmtPeople(a) + " – " + fmtPeople(b);
     $("casDead").textContent = range(r.deadLo, r.deadHi);
     $("casInj").textContent = range(r.injLo, r.injHi);
-    $("casNote").textContent = `${fmtPeople(r.total)} Menschen leben im betroffenen Gebiet. Untere Zahl: nur Druckwelle, obere: mit Hitze und Strahlung. Ohne Fallout.`;
+    $("casNote").textContent = `${fmtPeople(r.total)} Menschen leben im betroffenen Gebiet. Untere Zahl: nur Druckwelle, obere: ${state.type === "conv" ? "mit Feuerball und Glassplittern" : "mit Hitze und Strahlung. Ohne Fallout"}.`;
   }
   render();
 }
@@ -837,9 +944,11 @@ function detonate() {
   runEstimate();
   $("hint").textContent = "Fadenkreuz ziehen oder auf die Karte tippen, um das Ziel zu verschieben";
   if (!reduceMotion) {
-    $("flash").animate([{ opacity: 0.9 }, { opacity: 0 }], { duration: 650, easing: "ease-out" });
+    const conv = state.type === "conv";
+    $("flash").style.background = conv ? "#ffb877" : "";
+    $("flash").animate([{ opacity: conv ? 0.45 : 0.9 }, { opacity: 0 }], { duration: conv ? 380 : 650, easing: "ease-out" });
     startBoom();
-    playBoom();
+    playBoom(conv);
   }
   render();
 }
@@ -855,7 +964,9 @@ function setYield(kt, fromRange) {
 }
 function render() {
   const list = currentRadii();
-  $("summary").innerHTML = state.burst === "air"
+  $("summary").innerHTML = state.type === "conv"
+    ? `<b>${fmtYield(state.kt)}</b> TNT · konventionell, bodennah`
+    : state.burst === "air"
     ? `<b>${fmtYield(state.kt)}</b> · Luft, Höhe ≈ ${fmtKm(burstHeightKm(state.kt))}`
     : `<b>${fmtYield(state.kt)}</b> · Boden, starker Fallout`;
   $("fx").innerHTML = list.slice().reverse().map(e => `
@@ -868,6 +979,24 @@ function render() {
   schedule();
 }
 
+/* Art der Explosion: nuklear oder konventionell (chemisch) */
+function setType(t, smoke, thermo) {
+  state.type = t;
+  state.smoke = smoke || "dark";
+  state.thermo = !!thermo;
+  EFFECTS = t === "conv" ? EFFECTS_CONV : EFFECTS_NUC;
+  BLAST = t === "conv" ? BLAST_CONV : BLAST_NUC;
+  document.querySelectorAll("#kind button").forEach(x => x.classList.toggle("on", x.dataset.v === t));
+  $("burstField").hidden = t === "conv";
+}
+$("kind").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b || b.dataset.v === state.type) return;
+  weaponIdx = -1;
+  setType(b.dataset.v);
+  syncWeapon();
+  if (state.detonated || state.boom) clearDetonation(); else render();
+});
+
 /* Waffenauswahl, gruppiert nach Herkunft */
 let weaponIdx = PRESETS.findIndex(p => p.name === "Little Boy");
 (() => {
@@ -875,7 +1004,7 @@ let weaponIdx = PRESETS.findIndex(p => p.name === "Little Boy");
   PRESETS.forEach((p, i) => { const key = p.group || p.country; let g = groups.find(g => g.c === key); if (!g) groups.push(g = { c: key, items: [] }); g.items.push(i); });
   groups.forEach(g => g.items.sort((a, b) => PRESETS[a].kt - PRESETS[b].kt)); // innerhalb eines Landes nach Sprengkraft
   $("weapon").innerHTML = `<option value="-1">Eigene Sprengkraft</option>` + groups.map(g =>
-    `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].special ? (PRESETS[i].origin || PRESETS[i].country) : PRESETS[i].year}) · ${PRESETS[i].assumed || PRESETS[i].approx ? "ca. " : ""}${fmtYield(PRESETS[i].kt)}${PRESETS[i].assumed ? " (angenommen)" : ""}</option>`).join("")}</optgroup>`).join("");
+    `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].special ? (PRESETS[i].origin || PRESETS[i].country) : PRESETS[i].year}) · ${PRESETS[i].assumed || PRESETS[i].approx ? "ca. " : ""}${fmtYield(PRESETS[i].kt)}${PRESETS[i].assumed ? " (angenommen)" : ""}${PRESETS[i].type === "conv" ? " · konventionell" : ""}</option>`).join("")}</optgroup>`).join("");
 })();
 function syncWeapon() {
   if (weaponIdx >= 0 && Math.abs(PRESETS[weaponIdx].kt - state.kt) > 1e-6) weaponIdx = -1;
@@ -885,7 +1014,7 @@ function syncWeapon() {
 }
 $("weapon").addEventListener("change", e => {
   weaponIdx = +e.target.value;
-  if (weaponIdx >= 0) setYield(PRESETS[weaponIdx].kt); else syncWeapon();
+  if (weaponIdx >= 0) { const p = PRESETS[weaponIdx]; setType(p.type || "nuc", p.smoke, p.thermo); setYield(p.kt); } else syncWeapon();
   if (state.detonated || state.boom) clearDetonation();
 });
 $("yieldRange").addEventListener("input", e => { setYield(Math.pow(10, +e.target.value), true); if (state.detonated || state.boom) clearDetonation(); });
