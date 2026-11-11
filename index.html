@@ -154,6 +154,14 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
 .maplibregl-ctrl-attrib-button { filter: invert(1); }
 .maplibregl-ctrl-bottom-left { left: 86px; }
 .legend { position: absolute; right: 12px; bottom: 34px; width: 340px; max-height: calc(100% - 290px); min-height: 0; display: flex; flex-direction: column; background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); border-radius: 12px; z-index: 3; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+.legend-top { display: flex; align-items: center; }
+.legend-top .legend-head { flex: 1; min-width: 0; }
+.zswitch { display: flex; align-items: center; gap: 7px; background: none; border: 0; color: var(--muted); font: 500 12px var(--body); padding: 8px 12px 8px 4px; cursor: pointer; flex: none; }
+.zswitch i { position: relative; width: 30px; height: 18px; border-radius: 9px; background: var(--line); transition: background .15s; }
+.zswitch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+.zswitch[aria-checked="true"] { color: var(--text); }
+.zswitch[aria-checked="true"] i { background: var(--select); }
+.zswitch[aria-checked="true"] i::after { transform: translateX(12px); background: var(--ink); }
 .legend-head { display: flex; align-items: center; gap: 10px; background: none; border: 0; color: var(--text); padding: 11px 14px; cursor: pointer; text-align: left; font: inherit; }
 .legend-sum { flex: 1; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .legend-sum b { color: var(--text); font-weight: 500; }
@@ -191,11 +199,16 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
     </div>
     <a class="maptiler-logo" href="https://www.maptiler.com" target="_blank" rel="noopener"><img src="https://api.maptiler.com/resources/logo.svg" alt="MapTiler"></a>
     <section class="legend" id="legend" aria-label="Wirkungszonen">
-      <button class="legend-head" id="legendToggle" aria-expanded="true">
-        <span class="label">Wirkungszonen</span>
-        <span class="legend-sum" id="summary"></span>
-        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 15l6-6 6 6"/></svg>
-      </button>
+      <div class="legend-top">
+        <button class="legend-head" id="legendToggle" aria-expanded="true">
+          <span class="label">Wirkungszonen</span>
+          <span class="legend-sum" id="summary"></span>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 15l6-6 6 6"/></svg>
+        </button>
+        <button class="zswitch" id="zoneSwitch" role="switch" aria-checked="true" title="Radien auf der Karte ein- oder ausblenden">
+          <span>Radien</span><i></i>
+        </button>
+      </div>
       <div class="cas" id="cas" hidden>
         <div class="cas-row">
           <div><span class="cas-k">Tote</span><span class="cas-v" id="casDead">–</span></div>
@@ -669,7 +682,7 @@ const TL_CONV = { shockStart: 120, shockDur: 2600, cloudStart: 200, cloudGrow: 3
 let TL = TL_NUC;
 
 function drawEffects(now) {
-  if (!state.target || !state.detonated) return;
+  if (!state.target || !state.detonated || state.hideZones) return;
   const list = currentRadii().slice().reverse();
   const b = state.boom, el = b ? now - b.t0 : Infinity;
   for (const e of list) {
@@ -1267,6 +1280,11 @@ function placeLegend() {
 }
 mqWide.addEventListener("change", placeLegend);
 placeLegend();
+$("zoneSwitch").addEventListener("click", () => {
+  state.hideZones = !state.hideZones;
+  $("zoneSwitch").setAttribute("aria-checked", String(!state.hideZones));
+  schedule();
+});
 $("legendToggle").addEventListener("click", () => {
   const lg = $("legend"), closed = lg.classList.toggle("closed");
   $("legendToggle").setAttribute("aria-expanded", String(!closed));
