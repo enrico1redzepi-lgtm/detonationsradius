@@ -332,10 +332,10 @@ const PRESETS = [
   { name: "W88", kt: 475, country: "USA", year: "aktuell", note: "Stärkerer Sprengkopf der Trident II." },
   { name: "B83", kt: 1200, country: "USA", year: "aktuell", note: "Stärkste Waffe im heutigen US-Arsenal, Freifallbombe." },
   // Sowjetunion / Russland
-  { name: "RDS-1", kt: 22, country: "Sowjetunion", year: "1949", note: "Erster sowjetischer Kernwaffentest, Semipalatinsk (Kasachstan)." },
-  { name: "RDS-37", kt: 1600, country: "Sowjetunion", year: "1955", note: "Erste sowjetische zweistufige Wasserstoffbombe." },
-  { name: "Zar-Bombe (AN602)", kt: 50000, country: "Sowjetunion", year: "1961", note: "Stärkste je gezündete Explosion, über Nowaja Semlja." },
-  { name: "R-36M2 (SS-18), Einzelsprengkopf", kt: 20000, country: "Sowjetunion / Russland", year: "1991", note: "Schwerer Einzelsprengkopf der größten Interkontinentalrakete." },
+  { name: "RDS-1", group: "Sowjetunion / Russland", kt: 22, country: "Sowjetunion", year: "1949", note: "Erster sowjetischer Kernwaffentest, Semipalatinsk (Kasachstan)." },
+  { name: "RDS-37", group: "Sowjetunion / Russland", kt: 1600, country: "Sowjetunion", year: "1955", note: "Erste sowjetische zweistufige Wasserstoffbombe." },
+  { name: "Zar-Bombe (AN602)", group: "Sowjetunion / Russland", kt: 50000, country: "Sowjetunion", year: "1961", note: "Stärkste je gezündete Explosion, über Nowaja Semlja." },
+  { name: "R-36M2 (SS-18), Einzelsprengkopf", group: "Sowjetunion / Russland", kt: 20000, country: "Sowjetunion / Russland", year: "1991", note: "Schwerer Einzelsprengkopf der größten Interkontinentalrakete." },
   // Weitere Staaten
   { name: "Hurricane", kt: 25, country: "Großbritannien", year: "1952", note: "Erster britischer Kernwaffentest, in einem Schiff vor Australien gezündet." },
   { name: "Gerboise Bleue", kt: 70, country: "Frankreich", year: "1960", note: "Erster französischer Test, in der algerischen Sahara." },
@@ -855,7 +855,8 @@ function render() {
 let weaponIdx = PRESETS.findIndex(p => p.name === "Little Boy");
 (() => {
   const groups = [];
-  PRESETS.forEach((p, i) => { let g = groups.find(g => g.c === p.country); if (!g) groups.push(g = { c: p.country, items: [] }); g.items.push(i); });
+  PRESETS.forEach((p, i) => { const key = p.group || p.country; let g = groups.find(g => g.c === key); if (!g) groups.push(g = { c: key, items: [] }); g.items.push(i); });
+  groups.forEach(g => g.items.sort((a, b) => PRESETS[a].kt - PRESETS[b].kt)); // innerhalb eines Landes nach Sprengkraft
   $("weapon").innerHTML = `<option value="-1">Eigene Sprengkraft</option>` + groups.map(g =>
     `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].year}) · ${fmtYield(PRESETS[i].kt)}</option>`).join("")}</optgroup>`).join("");
 })();
