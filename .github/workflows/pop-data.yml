@@ -1,0 +1,43 @@
+name: Bevölkerungsdaten aufbereiten
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "tools/build_pop_tiles.py"
+      - ".github/workflows/pop-data.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pakete installieren
+        run: pip install rasterio numpy
+      - name: GHSL GHS-POP 2025 (30 arcsec, WGS84) herunterladen
+        run: |
+          curl -fL --retry 3 -o pop.zip \
+            "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2023A/GHS_POP_E2025_GLOBE_R2023A_4326_30ss/V1-0/GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.zip"
+          ls -la pop.zip
+          unzip -o pop.zip -d pop
+          ls -la pop
+      - name: Kacheln erzeugen
+        run: |
+          rm -rf data/pop
+          python tools/build_pop_tiles.py "$(ls pop/*.tif | head -1)" data/pop
+          du -sh data/pop
+      - name: Ergebnis einchecken
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/pop
+          git commit -m "Bevölkerungskacheln aus GHSL GHS-POP E2025 R2023A" || echo "Keine Änderungen"
+          git pull --rebase origin main
+          git push origin HEAD:main
