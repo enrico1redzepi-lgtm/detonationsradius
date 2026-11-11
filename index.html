@@ -41,13 +41,35 @@ body { background: var(--ink); color: var(--text); font: 14px/1.45 var(--body); 
 #map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
 .panel { grid-column: 1; grid-row: 1; background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding: 18px 18px 24px; }
 
+/* Handy: Karte füllt den Bildschirm, Bedienung als Blatt von unten (eingeklappt: Zünden + Waffe) */
 @media (max-width: 859px) {
-  .app { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
-  .map-wrap { grid-column: 1; grid-row: 1; }
-  .panel { grid-column: 1; grid-row: 2; border-right: 0; border-top: 1px solid var(--line); max-height: 54vh; padding: 10px 16px 20px; gap: 14px; border-radius: 14px 14px 0 0; margin-top: -14px; position: relative; z-index: 2; transition: max-height .25s ease; }
-  .panel.collapsed { max-height: 132px; overflow: hidden; }
-  .grip { display: flex !important; }
+  :root { --peek: 172px; }
+  .app { display: block; position: relative; }
+  .map-wrap { position: absolute; left: 0; right: 0; top: 0; bottom: calc(var(--peek) - 16px); }
+  .panel { position: absolute; left: 0; right: 0; bottom: 0; height: var(--peek); border-right: 0; border-top: 1px solid var(--line);
+           padding: 6px 16px calc(16px + env(safe-area-inset-bottom)); gap: 14px; border-radius: 16px 16px 0 0; z-index: 4;
+           box-shadow: 0 -10px 30px rgba(0,0,0,.45); transition: height .28s ease; overflow-y: hidden; }
+  .panel.open { height: min(78%, 640px); overflow-y: auto; }
+  .grip { display: flex !important; padding: 4px 0 6px; touch-action: none; }
+  .panel > * { flex: none; }
+  .panel .grip { order: 0; } .panel .actions { order: 1; } #weaponField { order: 2; } .panel .search { order: 3; }
+  #yieldField { order: 4; } #kindField { order: 5; } #burstField { order: 6; } .panel .legend { order: 7; } .panel .foot { order: 9; }
+  .panel header { display: none; }
+  .panel input[type=text], .panel input[type=number], .panel select { font-size: 16px; }
+  .btn { padding: 14px 16px; }
+  #zin, #zout { display: none; }
+  .zoom button { width: 42px; height: 42px; }
+  .hint { font-size: 12.5px; transition: opacity .4s; }
+  .hint.fade { opacity: 0; }
+  .timer { font-size: 22px; }
+  .maplibregl-ctrl-bottom-left { display: none; }
+  .mcas { display: flex !important; }
 }
+.mcas { display: none; position: absolute; left: 50%; transform: translateX(-50%); top: 112px; z-index: 3; gap: 14px; align-items: baseline;
+        background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.mcas b { font: 500 15px var(--mono); color: var(--text); margin-left: 4px; }
+.mcas b.dead { color: #ff8b8e; }
+.mcas[hidden] { display: none !important; }
 .grip { display: none; justify-content: center; padding: 2px 0 0; background: none; border: 0; cursor: pointer; }
 .grip span { width: 40px; height: 4px; border-radius: 2px; background: var(--line); }
 
@@ -218,6 +240,7 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
       </div>
       <ul class="fx" id="fx"></ul>
     </section>
+    <div class="mcas" id="mcas" hidden><span>Tote<b class="dead" id="mDead">–</b></span><span>Verletzte<b id="mInj">–</b></span></div>
     <div class="flash" id="flash"></div>
   </div>
 
@@ -234,13 +257,13 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
       <div class="results" id="results" role="listbox"></div>
     </div>
 
-    <div class="field">
+    <div class="field" id="weaponField">
       <span class="label">Waffe</span>
       <select id="weapon" aria-label="Waffe auswählen"></select>
       <p class="weapon-info" id="weaponInfo"></p>
     </div>
 
-    <div class="field">
+    <div class="field" id="yieldField">
       <label class="label" for="yieldNum">Sprengkraft</label>
       <div class="yield-row">
         <input type="number" id="yieldNum" min="0.01" step="any" inputmode="decimal">
@@ -250,7 +273,7 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
       <div class="ticks"><span>10 t</span><span>10 kt</span><span>10 Mt</span><span>10 Gt</span></div>
     </div>
 
-    <div class="field">
+    <div class="field" id="kindField">
       <span class="label">Art</span>
       <div class="seg" id="kind">
         <button data-v="nuc" class="on">Nuklear</button>
@@ -1118,6 +1141,7 @@ function showEstimate() {
     const range = (a, b) => fmtPeople(a) === fmtPeople(b) ? fmtPeople(a) : fmtPeople(a) + " – " + fmtPeople(b);
     $("casDead").textContent = range(r.deadLo, r.deadHi);
     $("casInj").textContent = range(r.injLo, r.injHi);
+    $("mDead").textContent = range(r.deadLo, r.deadHi); $("mInj").textContent = range(r.injLo, r.injHi); $("mcas").hidden = false;
     $("casNote").textContent = `${fmtPeople(r.total)} Menschen leben im betroffenen Gebiet. Untere Zahl: nur Druckwelle, obere: ${state.type === "conv" ? "mit Feuerball und Glassplittern" : "mit Hitze und Strahlung. Ohne Fallout"}.`;
   }
   render();
@@ -1125,13 +1149,13 @@ function showEstimate() {
 
 /* ---------- Ziel setzen und ziehen ---------- */
 let dragging = false, justDragged = 0;
-function nearTarget(pt) { if (!state.target) return false; const [x, y] = P(state.target); return Math.hypot(pt.x - x, pt.y - y) < 30; }
+function nearTarget(pt) { if (!state.target) return false; const [x, y] = P(state.target); return Math.hypot(pt.x - x, pt.y - y) < (isPhone() ? 42 : 30); }
 function clearDetonation() {
   boomToken++; state.detonated = false; state.boom = null; state.destroy = null; shakes = []; $("stage").style.transform = "";
   bldReach = null; applyBuildings();
   $("timer").classList.remove("show");
   $("hint").textContent = "„Zünden“ startet die Explosion.";
-  casToken++; casResult = null; $("cas").hidden = true;
+  casToken++; casResult = null; $("cas").hidden = true; $("mcas").hidden = true;
   render();
 }
 function setTarget(ll) {
@@ -1172,6 +1196,7 @@ function detonate() {
   ++boomToken;
   state.boom = null;
   state.detonated = true;
+  if (isPhone()) sheet(false);
   state.destroy = makeDestroy();
   bldReach = reduceMotion ? 1e9 : 0; applyBuildings();
   runEstimate();
@@ -1286,7 +1311,25 @@ $("layers").addEventListener("click", e => {
   document.querySelectorAll("#layers button").forEach(x => x.classList.toggle("on", x === b));
   map.setStyle(STYLES[state.layer]);
 });
-$("grip").addEventListener("click", () => { $("panel").classList.toggle("collapsed"); setTimeout(() => map.resize(), 280); });
+/* Handy: Bedienblatt per Tippen oder Wischen auf- und zuklappen */
+const isPhone = () => matchMedia("(max-width: 859px)").matches;
+function sheet(open) { $("panel").classList.toggle("open", open); if (!open) $("panel").scrollTop = 0; }
+$("grip").addEventListener("click", () => sheet(!$("panel").classList.contains("open")));
+let swipeY = null;
+$("panel").addEventListener("touchstart", e => { if (e.target.closest(".grip") || $("panel").scrollTop <= 0) swipeY = e.touches[0].clientY; }, { passive: true });
+$("panel").addEventListener("touchend", e => {
+  if (swipeY === null) return;
+  const dy = e.changedTouches[0].clientY - swipeY; swipeY = null;
+  if (dy < -40) sheet(true); else if (dy > 40) sheet(false);
+}, { passive: true });
+map.on("dragstart", () => { if (isPhone()) sheet(false); });
+let hintTimer = null;
+const hintObserver = new MutationObserver(() => {
+  if (!isPhone()) return;
+  $("hint").classList.remove("fade"); clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => $("hint").classList.add("fade"), 4500);
+});
+hintObserver.observe($("hint"), { childList: true, characterData: true, subtree: true });
 
 /* Ortssuche */
 let places = [];
