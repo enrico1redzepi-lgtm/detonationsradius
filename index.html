@@ -69,7 +69,9 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .results button:hover, .results button.active { background: var(--land); }
 .results small { color: var(--muted); }
 
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+#weapon { width: 100%; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8d94' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 16px; padding-right: 34px; }
+.weapon-info { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); min-height: 1.4em; }
+.weapon-info b { color: var(--text); font-weight: 500; }
 .chip { flex: none; background: var(--ink); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 7px 12px; font: 13px var(--body); cursor: pointer; white-space: nowrap; }
 .chip b { font-weight: 500; color: var(--muted); margin-left: 4px; font-family: var(--mono); font-size: 12px; }
 .chip.on { border-color: var(--select); background: var(--land); }
@@ -220,7 +222,8 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
 
     <div class="field">
       <span class="label">Waffe</span>
-      <div class="chips" id="presets"></div>
+      <select id="weapon" aria-label="Waffe auswählen"></select>
+      <p class="weapon-info" id="weaponInfo"></p>
     </div>
 
     <div class="field">
@@ -312,15 +315,34 @@ const shockTime = (rKm, W) => { const s = Math.cbrt(W); return interp(SHOCK.xs, 
 const shockRadius = (tS, W) => { const s = Math.cbrt(W); return interp(SHOCK.ts, SHOCK.xs, tS / s) * s; };
 function fmtSec(s) { return s < 10 ? nf(s, 1) + " s" : s < 120 ? nf(s, 0) + " s" : nf(s / 60, 1) + " min"; }
 
+/* Waffen und Tests. Sprengkräfte nach öffentlich zugänglichen Angaben, bei Schätzungen der gängige Wert. */
 const PRESETS = [
-  { name: "Davy Crockett", kt: 0.02 },
-  { name: "Little Boy (Hiroshima)", kt: 15 },
-  { name: "Fat Man (Nagasaki)", kt: 21 },
-  { name: "W76-1 (Trident)", kt: 90 },
-  { name: "W88", kt: 475 },
-  { name: "B83", kt: 1200 },
-  { name: "Castle Bravo", kt: 15000 },
-  { name: "Zar-Bombe", kt: 50000 },
+  // USA
+  { name: "Trinity („Gadget“)", kt: 24.8, country: "USA", year: "1945", note: "Erster Kernwaffentest der Welt, New Mexico. Neubewertung von 2021, lange galten 21 kt." },
+  { name: "Little Boy", kt: 15, country: "USA", year: "1945", note: "Uranbombe, über Hiroshima abgeworfen." },
+  { name: "Fat Man", kt: 21, country: "USA", year: "1945", note: "Plutoniumbombe, über Nagasaki abgeworfen." },
+  { name: "Ivy Mike", kt: 10400, country: "USA", year: "1952", note: "Erster Test einer Wasserstoffbombe, Eniwetok-Atoll. Kein einsetzbarer Sprengkörper." },
+  { name: "Castle Bravo", kt: 15000, country: "USA", year: "1954", note: "Größter US-Test, Bikini-Atoll. Fiel fast dreimal so stark aus wie erwartet." },
+  { name: "Davy Crockett (W54)", kt: 0.02, country: "USA", year: "1961–1971", note: "Kleinste je stationierte Kernwaffe, von einer Art Rückstoßgeschütz abgefeuert." },
+  { name: "Starfish Prime", kt: 1400, country: "USA", year: "1962", note: "Höhenexplosion rund 400 km über dem Pazifik, löste einen starken elektromagnetischen Puls aus." },
+  { name: "B53", kt: 9000, country: "USA", year: "1962–1997", note: "Freifallbombe, lange die stärkste Waffe im US-Arsenal." },
+  { name: "B61-12", kt: 50, country: "USA", year: "aktuell", note: "Freifallbombe mit einstellbarer Sprengkraft, auch in Europa stationiert (Höchstwert)." },
+  { name: "W76-1", kt: 90, country: "USA", year: "aktuell", note: "Sprengkopf der U-Boot-Rakete Trident II, häufigster US-Sprengkopf." },
+  { name: "W87", kt: 300, country: "USA", year: "aktuell", note: "Sprengkopf der landgestützten Interkontinentalrakete Minuteman III." },
+  { name: "W88", kt: 475, country: "USA", year: "aktuell", note: "Stärkerer Sprengkopf der Trident II." },
+  { name: "B83", kt: 1200, country: "USA", year: "aktuell", note: "Stärkste Waffe im heutigen US-Arsenal, Freifallbombe." },
+  // Sowjetunion / Russland
+  { name: "RDS-1", kt: 22, country: "Sowjetunion", year: "1949", note: "Erster sowjetischer Kernwaffentest, Semipalatinsk (Kasachstan)." },
+  { name: "RDS-37", kt: 1600, country: "Sowjetunion", year: "1955", note: "Erste sowjetische zweistufige Wasserstoffbombe." },
+  { name: "Zar-Bombe (AN602)", kt: 50000, country: "Sowjetunion", year: "1961", note: "Stärkste je gezündete Explosion, über Nowaja Semlja." },
+  { name: "R-36M2 (SS-18), Einzelsprengkopf", kt: 20000, country: "Sowjetunion / Russland", year: "1991", note: "Schwerer Einzelsprengkopf der größten Interkontinentalrakete." },
+  // Weitere Staaten
+  { name: "Hurricane", kt: 25, country: "Großbritannien", year: "1952", note: "Erster britischer Kernwaffentest, in einem Schiff vor Australien gezündet." },
+  { name: "Gerboise Bleue", kt: 70, country: "Frankreich", year: "1960", note: "Erster französischer Test, in der algerischen Sahara." },
+  { name: "TN 75", kt: 100, country: "Frankreich", year: "aktuell", note: "Sprengkopf der französischen U-Boot-Raketen." },
+  { name: "Projekt 596", kt: 22, country: "China", year: "1964", note: "Erster chinesischer Kernwaffentest, Lop Nur." },
+  { name: "Smiling Buddha", kt: 8, country: "Indien", year: "1974", note: "Erster indischer Test, Pokhran. Offiziell 12 kt, Schätzungen liegen niedriger." },
+  { name: "6. Kernwaffentest", kt: 250, country: "Nordkorea", year: "2017", note: "Stärkster nordkoreanischer Test, Punggye-ri. Schätzung, die Angaben reichen von etwa 50 bis 300 kt." },
 ];
 
 
@@ -811,7 +833,7 @@ function setYield(kt, fromRange) {
   $("yieldUnit").value = String(unit);
   const val = state.kt / unit;
   $("yieldNum").value = +val.toPrecision(val >= 100 ? 3 : 2);
-  document.querySelectorAll(".chip").forEach(c => c.classList.toggle("on", Math.abs(+c.dataset.kt - state.kt) < 1e-6));
+  syncWeapon();
   render();
 }
 function render() {
@@ -829,8 +851,25 @@ function render() {
   schedule();
 }
 
-$("presets").innerHTML = PRESETS.map(p => `<button class="chip" data-kt="${p.kt}">${p.name}<b>${fmtYield(p.kt)}</b></button>`).join("");
-$("presets").addEventListener("click", e => { const c = e.target.closest(".chip"); if (c) { setYield(+c.dataset.kt); if (state.detonated || state.boom) clearDetonation(); } });
+/* Waffenauswahl, gruppiert nach Herkunft */
+let weaponIdx = PRESETS.findIndex(p => p.name === "Little Boy");
+(() => {
+  const groups = [];
+  PRESETS.forEach((p, i) => { let g = groups.find(g => g.c === p.country); if (!g) groups.push(g = { c: p.country, items: [] }); g.items.push(i); });
+  $("weapon").innerHTML = `<option value="-1">Eigene Sprengkraft</option>` + groups.map(g =>
+    `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].year}) · ${fmtYield(PRESETS[i].kt)}</option>`).join("")}</optgroup>`).join("");
+})();
+function syncWeapon() {
+  if (weaponIdx >= 0 && Math.abs(PRESETS[weaponIdx].kt - state.kt) > 1e-6) weaponIdx = -1;
+  $("weapon").value = String(weaponIdx);
+  const p = PRESETS[weaponIdx];
+  $("weaponInfo").innerHTML = p ? `<b>${p.country}, ${p.year}.</b> ${p.note}` : "Sprengkraft frei gewählt.";
+}
+$("weapon").addEventListener("change", e => {
+  weaponIdx = +e.target.value;
+  if (weaponIdx >= 0) setYield(PRESETS[weaponIdx].kt); else syncWeapon();
+  if (state.detonated || state.boom) clearDetonation();
+});
 $("yieldRange").addEventListener("input", e => { setYield(Math.pow(10, +e.target.value), true); if (state.detonated || state.boom) clearDetonation(); });
 const numChange = () => { const v = parseFloat(String($("yieldNum").value).replace(",", ".")); if (v > 0) { setYield(v * +$("yieldUnit").value); if (state.detonated || state.boom) clearDetonation(); } };
 $("yieldNum").addEventListener("change", numChange);
