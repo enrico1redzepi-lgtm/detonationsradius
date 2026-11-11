@@ -230,10 +230,10 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
       <label class="label" for="yieldNum">Sprengkraft</label>
       <div class="yield-row">
         <input type="number" id="yieldNum" min="0.01" step="any" inputmode="decimal">
-        <select id="yieldUnit" aria-label="Einheit"><option value="0.001">t</option><option value="1">kt</option><option value="1000">Mt</option></select>
+        <select id="yieldUnit" aria-label="Einheit"><option value="0.001">t</option><option value="1">kt</option><option value="1000">Mt</option><option value="1000000">Gt</option></select>
       </div>
-      <input type="range" id="yieldRange" min="-2" max="5" step="0.01" aria-label="Sprengkraft, logarithmisch">
-      <div class="ticks"><span>10 t</span><span>1 kt</span><span>100 kt</span><span>10 Mt</span><span>100 Mt</span></div>
+      <input type="range" id="yieldRange" min="-2" max="7" step="0.01" aria-label="Sprengkraft, logarithmisch">
+      <div class="ticks"><span>10 t</span><span>10 kt</span><span>10 Mt</span><span>10 Gt</span></div>
     </div>
 
     <div class="field">
@@ -343,6 +343,14 @@ const PRESETS = [
   { name: "Projekt 596", kt: 22, country: "China", year: "1964", note: "Erster chinesischer Kernwaffentest, Lop Nur." },
   { name: "Smiling Buddha", kt: 8, country: "Indien", year: "1974", note: "Erster indischer Test, Pokhran. Offiziell 12 kt, Schätzungen liegen niedriger." },
   { name: "6. Kernwaffentest", kt: 250, country: "Nordkorea", year: "2017", note: "Stärkster nordkoreanischer Test, Punggye-ri. Schätzung, die Angaben reichen von etwa 50 bis 300 kt." },
+  // Geplant, nie gebaut oder nie in voller Stärke gezündet
+  { name: "Sundial", kt: 1e7, country: "USA", year: "1954", group: "Geplant / nie gebaut", note: "Entwurf von Edward Teller, nie gebaut. Bei dieser Größe gelten die üblichen Skalierungsgesetze nicht mehr, die Radien sind nur eine grobe Hochrechnung." },
+  { name: "Gnomon", kt: 1e6, country: "USA", year: "1954", group: "Geplant / nie gebaut", note: "Sollte als Zündstufe für Sundial dienen. Ein Prototyp-Test war für 1956 geplant, fand aber nie statt. Radien nur grobe Hochrechnung." },
+  { name: "Zar-Bombe in voller Stärke", kt: 100000, country: "Sowjetunion", year: "1961", group: "Geplant / nie gebaut", note: "Ausgelegt auf 100 Mt, gezündet wurde aber nur die halbe Stärke." },
+  { name: "T-15-Torpedo", kt: 100000, country: "Sowjetunion", year: "1950er", group: "Geplant / nie gebaut", note: "Riesentorpedo gegen Häfen, 1954 eingestellt. Die oft genannten 100 Mt sind umstritten, möglicherweise war nur ein Sprengkopf von wenigen Megatonnen vorgesehen." },
+  { name: "Poseidon, westliche Schätzung", kt: 2000, country: "Russland", year: "in Entwicklung", group: "Geplant / nie gebaut", note: "Atomgetriebene Unterwasserdrohne (Status-6). Fachleute schätzen den Sprengkopf auf etwa 2 Mt." },
+  { name: "Poseidon, russische Behauptung", kt: 100000, country: "Russland", year: "in Entwicklung", group: "Geplant / nie gebaut", note: "Im russischen Staatsfernsehen genannte 100 Mt. Fachleute halten das für unrealistisch." },
+  /* Fiktive Waffen bekommen später assumed: true, wenn das Werk keine Sprengkraft nennt. */
 ];
 
 
@@ -357,9 +365,11 @@ const clamp01 = v => Math.max(0, Math.min(1, v));
 const easeOut = t => 1 - Math.pow(1 - t, 3);
 
 function fmtYield(kt) {
-  if (kt >= 1000) return nf(kt / 1000, kt >= 10000 ? 0 : 1) + " Mt";
-  if (kt >= 1) return nf(kt, kt >= 10 ? 0 : 1) + " kt";
-  return nf(kt * 1000, 0) + " t";
+  const f = (v, d) => v.toLocaleString("de-DE", { maximumFractionDigits: d });
+  if (kt >= 1e6) return f(kt / 1e6, 1) + " Gt";
+  if (kt >= 1000) return f(kt / 1000, 1) + " Mt";
+  if (kt >= 1) return f(kt, 1) + " kt";
+  return f(kt * 1000, 0) + " t";
 }
 function fmtKm(r) { return r < 1 ? nf(r * 1000, 0) + " m" : nf(r, r < 10 ? 2 : 1) + " km"; }
 function fmtArea(r) { const a = Math.PI * r * r; return nf(a, a < 1 ? 2 : a < 100 ? 1 : 0) + " km²"; }
@@ -827,9 +837,9 @@ function detonate() {
   render();
 }
 function setYield(kt, fromRange) {
-  state.kt = Math.min(100000, Math.max(0.01, kt));
+  state.kt = Math.min(1e7, Math.max(0.01, kt));
   if (!fromRange) $("yieldRange").value = Math.log10(state.kt);
-  const unit = state.kt >= 1000 ? 1000 : state.kt >= 1 ? 1 : 0.001;
+  const unit = state.kt >= 1e6 ? 1e6 : state.kt >= 1000 ? 1000 : state.kt >= 1 ? 1 : 0.001;
   $("yieldUnit").value = String(unit);
   const val = state.kt / unit;
   $("yieldNum").value = +val.toPrecision(val >= 100 ? 3 : 2);
@@ -858,13 +868,13 @@ let weaponIdx = PRESETS.findIndex(p => p.name === "Little Boy");
   PRESETS.forEach((p, i) => { const key = p.group || p.country; let g = groups.find(g => g.c === key); if (!g) groups.push(g = { c: key, items: [] }); g.items.push(i); });
   groups.forEach(g => g.items.sort((a, b) => PRESETS[a].kt - PRESETS[b].kt)); // innerhalb eines Landes nach Sprengkraft
   $("weapon").innerHTML = `<option value="-1">Eigene Sprengkraft</option>` + groups.map(g =>
-    `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].year}) · ${fmtYield(PRESETS[i].kt)}</option>`).join("")}</optgroup>`).join("");
+    `<optgroup label="${g.c}">${g.items.map(i => `<option value="${i}">${PRESETS[i].name} (${PRESETS[i].year}) · ${PRESETS[i].assumed ? "ca. " : ""}${fmtYield(PRESETS[i].kt)}${PRESETS[i].assumed ? " (angenommen)" : ""}</option>`).join("")}</optgroup>`).join("");
 })();
 function syncWeapon() {
   if (weaponIdx >= 0 && Math.abs(PRESETS[weaponIdx].kt - state.kt) > 1e-6) weaponIdx = -1;
   $("weapon").value = String(weaponIdx);
   const p = PRESETS[weaponIdx];
-  $("weaponInfo").innerHTML = p ? `<b>${p.country}, ${p.year}.</b> ${p.note}` : "Sprengkraft frei gewählt.";
+  $("weaponInfo").innerHTML = p ? `<b>${p.country}, ${p.year}.</b> ${p.note}${p.assumed ? " <b>Die Sprengkraft wird im Werk nicht genannt, der Wert ist angenommen.</b>" : ""}` : "Sprengkraft frei gewählt.";
 }
 $("weapon").addEventListener("change", e => {
   weaponIdx = +e.target.value;
