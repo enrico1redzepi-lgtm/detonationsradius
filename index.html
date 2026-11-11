@@ -286,7 +286,10 @@ const EFFECTS = [
     desc: () => "Fenster bersten. Glassplitter verletzen viele Menschen, die sich in Gebäuden aufhalten." },
 ];
 const burstHeightKm = W => 0.24 * Math.cbrt(W); // für 5 psi optimiert (Hiroshima: 15 kt ≈ 600 m)
-const cloudRadiusKm = W => 0.9 * Math.pow(W, 0.33); // Pilzhut von oben, grobe Näherung
+/* Pilz: Radius des Pilzhuts in km. Die Sprengkraft wird auf 5-kt-Stufen gerundet,
+   jede Stufe ergibt einen größeren Pilz; das Wachstum folgt der Kubikwurzel. */
+const mushroomKt = W => W < 5 ? W : Math.ceil(W / 5) * 5;
+const cloudRadiusKm = W => 0.9 * Math.pow(mushroomKt(W), 0.33);
 const BLAST = { heavy: 1, moderate: 0.65, light: 0.35 }; // Stärke für Wackeln/Vibration
 
 /* Ankunftszeit der Druckwelle: Tabelle für 1 kt, skaliert mit W^(1/3) für Weg und Zeit.
@@ -412,7 +415,7 @@ function drawFx() {
 }
 
 /* Zeitplan der Animation in Millisekunden (zusammengerafft, die Anzeige zeigt die echte Zeit) */
-const TL = { shockStart: 250, shockDur: 3800, cloudStart: 450, cloudGrow: 5200, fadeStart: 7600, end: 10200 };
+const TL = { shockStart: 250, shockDur: 3800, cloudStart: 450, cloudGrow: 4600, fadeStart: 6600, end: 9200 };
 
 function drawEffects(now) {
   if (!state.target || !state.detonated) return;
@@ -442,7 +445,10 @@ function startBoom() {
   const hitAt = {}, tPhys = {};
   for (const id of Object.keys(BLAST)) { tPhys[id] = shockTime(radii[id], W0); hitAt[id] = TL.shockStart + tPhys[id] / tMax * TL.shockDur; }
   const parts = [];
-  for (let i = 0; i < 150; i++) parts.push({ a: Math.random() * 6.283, d: Math.sqrt(Math.random()), s: 0.22 + Math.random() * 0.3, w: (Math.random() - 0.5) * 0.5, sh: Math.random() });
+  const R = Math.random;
+  for (let i = 0; i < 110; i++) { const a = R() * 6.283, r = Math.sqrt(R()); parts.push({ k: "cap", x: Math.cos(a) * r, y: Math.sin(a) * r, s: 0.28 + R() * 0.25, ph: R() * 6.283, sh: R() }); }
+  for (let i = 0; i < 45; i++) parts.push({ k: "stem", t: R(), x: (R() - 0.5), s: 0.18 + R() * 0.14, ph: R() * 6.283, sh: R() });
+  for (let i = 0; i < 30; i++) parts.push({ k: "base", x: (R() - 0.5) * 2, y: R(), s: 0.2 + R() * 0.2, ph: R() * 6.283, sh: R() });
   const dust = [];
   if (state.burst === "surface") for (let i = 0; i < 70; i++) dust.push({ a: Math.random() * 6.283, d: 0.9 + Math.random() * 0.7, s: 0.2 + Math.random() * 0.25, sh: Math.random() });
   state.boom = { t0: performance.now(), W: W0, radii, rFront, tMax, hitAt, tPhys, fired: {}, parts, dust,
@@ -482,28 +488,58 @@ function drawExplosion(now) {
     b.fired[id] = true; shake(10 * BLAST[id], 0); buzz(Math.round(120 * BLAST[id])); thump(BLAST[id]);
   }
 
-  /* Pilzwolke von oben */
+  /* Staubring am Boden (nur Bodendetonation) */
   const cp = easeOut(clamp01((el - TL.cloudStart) / TL.cloudGrow));
-  const cA = clamp01((el - TL.cloudStart) / 700) * (1 - clamp01((el - TL.fadeStart) / (TL.end - TL.fadeStart)));
+  const cA = clamp01((el - TL.cloudStart) / 600) * (1 - clamp01((el - TL.fadeStart) / (TL.end - TL.fadeStart)));
+  const heat = clamp01(1 - (el - TL.cloudStart) / 2200);
   if (cA > 0) {
     const Rk = b.radii.fireball + (b.rCloud - b.radii.fireball) * cp;
-    const heat = clamp01(1 - (el - TL.cloudStart) / 2400);
     for (const d of b.dust) {
       const ang = d.a + cp * 0.2, dist = d.d * Rk * (0.4 + 0.6 * cp);
       const [x, y] = P(offsetLL(state.target, Math.cos(ang) * dist, Math.sin(ang) * dist));
       puff(x, y, d.s * Rk * pxkm, `${120 - d.sh * 30 | 0},${102 - d.sh * 25 | 0},${80 - d.sh * 20 | 0}`, 0.16 * cA);
     }
-    for (const p of b.parts) {
-      const ang = p.a + p.w * cp * 1.6, dist = p.d * Rk * 0.82;
-      const [x, y] = P(offsetLL(state.target, Math.cos(ang) * dist, Math.sin(ang) * dist));
-      const sz = Math.max(3, p.s * Rk * pxkm * (0.55 + 0.45 * cp));
-      const k = 1 - p.sh * 0.35;
-      const rgb = `${Math.round((255 * heat + 104 * (1 - heat)) * k)},${Math.round((140 * heat + 96 * (1 - heat)) * k)},${Math.round((60 * heat + 90 * (1 - heat)) * k)}`;
-      puff(x, y, sz, rgb, 0.26 * cA);
+  }
+
+  /* Atompilz: steht aufrecht über dem Ziel, Hut steigt auf und wächst */
+  const sCap = b.rCloud * pxkm;                       // Hut-Radius in Pixel (Endgröße)
+  const rise = sCap * 2.3 * cp;                       // Höhe der Hutmitte
+  b.rise = rise;
+  if (cA > 0) {
+    const rx = sCap * (0.35 + 0.65 * cp), ry = rx * 0.5;
+    const capY = cy - rise;
+    const col = (sh, lift) => {                       // heiß orange -> grau, unten dunkler
+      const k = (1 - sh * 0.3) * (0.82 + 0.18 * lift);
+      return `${Math.round((255 * heat + 150 * (1 - heat)) * k)},${Math.round((150 * heat + 140 * (1 - heat)) * k)},${Math.round((70 * heat + 132 * (1 - heat)) * k)}`;
+    };
+    // Säule
+    const stemTop = capY + ry * 0.4, stemLen = Math.max(0, cy - stemTop);
+    for (const p of b.parts) if (p.k === "stem" && stemLen > 2) {
+      const y = cy - p.t * stemLen, w = sCap * (0.22 + 0.16 * (1 - p.t)) * (0.5 + 0.5 * cp);
+      const x = cx + p.x * w + Math.sin(el * 0.002 + p.ph) * w * 0.15;
+      puff(x, y, Math.max(3, p.s * sCap * (0.6 + 0.4 * cp)), col(p.sh, p.t), 0.5 * cA);
+    }
+    // Fuß der Säule
+    for (const p of b.parts) if (p.k === "base") {
+      const x = cx + p.x * sCap * 0.7 * (0.4 + 0.6 * cp), y = cy - p.y * sCap * 0.18;
+      puff(x, y, Math.max(3, p.s * sCap * (0.5 + 0.5 * cp)), col(p.sh, 0), 0.4 * cA);
+    }
+    // Hut mit leichter Rollbewegung
+    for (const p of b.parts) if (p.k === "cap") {
+      const roll = Math.sin(el * 0.0015 + p.ph) * 0.06;
+      const x = cx + (p.x + roll) * rx, y = capY + p.y * ry + Math.cos(el * 0.0015 + p.ph) * ry * 0.05;
+      puff(x, y, Math.max(3, p.s * rx), col(p.sh, 1 - (p.y + 1) / 2), 0.55 * cA);
+    }
+    // glühender Kern im Hut, solange heiß
+    if (heat > 0.02) {
+      ctx.globalCompositeOperation = "lighter";
+      puff(cx, capY, rx * 0.7, "255,140,50", 0.45 * heat * cA);
+      ctx.globalCompositeOperation = "source-over";
     }
   }
 
-  /* Feuerball und Lichtblitz */
+  /* Feuerball und Lichtblitz (steigt mit dem Pilz auf) */
+  const fy = cy - (b.rise || 0) * clamp01((el - 500) / 1500);
   const life = el < 600 ? 1 : clamp01(1 - (el - 600) / 3200);
   if (life > 0) {
     const R0 = b.radii.fireball * pxkm;
@@ -514,16 +550,16 @@ function drawExplosion(now) {
     const glow = Math.exp(-el / 380);
     if (glow > 0.01) {
       const gr = r * 7 + 60;
-      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, gr);
+      const g = ctx.createRadialGradient(cx, fy, 0, cx, fy, gr);
       g.addColorStop(0, `rgba(255,244,214,${0.75 * glow})`); g.addColorStop(1, "rgba(255,200,120,0)");
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, gr, 0, 6.283); ctx.fill();
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, fy, gr, 0, 6.283); ctx.fill();
     }
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * flick);
+    const g = ctx.createRadialGradient(cx, fy, 0, cx, fy, r * flick);
     g.addColorStop(0, `rgba(255,${Math.round(200 + 55 * heat)},${Math.round(120 + 135 * heat)},${life})`);
     g.addColorStop(0.45, `rgba(255,${Math.round(110 + 90 * heat)},${Math.round(30 + 60 * heat)},${0.9 * life})`);
     g.addColorStop(0.8, `rgba(${Math.round(180 + 60 * heat)},${Math.round(40 + 40 * heat)},20,${0.55 * life})`);
     g.addColorStop(1, "rgba(120,20,10,0)");
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r * flick, 0, 6.283); ctx.fill();
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, fy, r * flick, 0, 6.283); ctx.fill();
     ctx.globalCompositeOperation = "source-over";
   }
 
