@@ -289,7 +289,7 @@ const burstHeightKm = W => 0.24 * Math.cbrt(W); // für 5 psi optimiert (Hiroshi
 /* Pilz: Radius des Pilzhuts in km. Die Sprengkraft wird auf 5-kt-Stufen gerundet,
    jede Stufe ergibt einen größeren Pilz; das Wachstum folgt der Kubikwurzel. */
 const mushroomKt = W => W < 5 ? W : Math.ceil(W / 5) * 5;
-const cloudRadiusKm = W => 0.9 * Math.pow(mushroomKt(W), 0.33);
+const cloudRadiusKm = W => Math.pow(mushroomKt(W), 0.36); // 15 kt ≈ 2,6 km, 1 Mt ≈ 12 km, 50 Mt ≈ 49 km
 const BLAST = { heavy: 1, moderate: 0.65, light: 0.35 }; // Stärke für Wackeln/Vibration
 
 /* Ankunftszeit der Druckwelle: Tabelle für 1 kt, skaliert mit W^(1/3) für Weg und Zeit.
@@ -501,34 +501,35 @@ function drawExplosion(now) {
     }
   }
 
-  /* Atompilz: steht aufrecht über dem Ziel, Hut steigt auf und wächst */
+  /* Atompilz: von oben gesehen eine runde Wolke, mit Neigung (3D) steht er auf */
+  const side = clamp01(map.getPitch() / 60);          // 0 = Draufsicht, 1 = Seitenansicht
   const sCap = b.rCloud * pxkm;                       // Hut-Radius in Pixel (Endgröße)
-  const rise = sCap * 2.3 * cp;                       // Höhe der Hutmitte
+  const rise = sCap * 1.7 * cp * side;                // Höhe der Hutmitte auf dem Bildschirm
   b.rise = rise;
   if (cA > 0) {
-    const rx = sCap * (0.35 + 0.65 * cp), ry = rx * 0.5;
+    const rx = sCap * (0.35 + 0.65 * cp), ry = rx * (1 - 0.5 * side);
     const capY = cy - rise;
     const col = (sh, lift) => {                       // heiß orange -> grau, unten dunkler
-      const k = (1 - sh * 0.3) * (0.82 + 0.18 * lift);
-      return `${Math.round((255 * heat + 150 * (1 - heat)) * k)},${Math.round((150 * heat + 140 * (1 - heat)) * k)},${Math.round((70 * heat + 132 * (1 - heat)) * k)}`;
+      const k = (1 - sh * 0.18) * (0.88 + 0.12 * lift);
+      return `${Math.round((255 * heat + 214 * (1 - heat)) * k)},${Math.round((165 * heat + 207 * (1 - heat)) * k)},${Math.round((90 * heat + 198 * (1 - heat)) * k)}`;
     };
     // Säule
     const stemTop = capY + ry * 0.4, stemLen = Math.max(0, cy - stemTop);
-    for (const p of b.parts) if (p.k === "stem" && stemLen > 2) {
+    for (const p of b.parts) if (p.k === "stem" && stemLen > 2 && side > 0.05) {
       const y = cy - p.t * stemLen, w = sCap * (0.22 + 0.16 * (1 - p.t)) * (0.5 + 0.5 * cp);
       const x = cx + p.x * w + Math.sin(el * 0.002 + p.ph) * w * 0.15;
-      puff(x, y, Math.max(3, p.s * sCap * (0.6 + 0.4 * cp)), col(p.sh, p.t), 0.5 * cA);
+      puff(x, y, Math.max(3, p.s * sCap * (0.6 + 0.4 * cp)), col(p.sh, p.t), 0.5 * cA * side);
     }
     // Fuß der Säule
     for (const p of b.parts) if (p.k === "base") {
-      const x = cx + p.x * sCap * 0.7 * (0.4 + 0.6 * cp), y = cy - p.y * sCap * 0.18;
+      const x = cx + p.x * sCap * 0.7 * (0.4 + 0.6 * cp), y = cy - p.y * sCap * 0.18 * side;
       puff(x, y, Math.max(3, p.s * sCap * (0.5 + 0.5 * cp)), col(p.sh, 0), 0.4 * cA);
     }
     // Hut mit leichter Rollbewegung
     for (const p of b.parts) if (p.k === "cap") {
       const roll = Math.sin(el * 0.0015 + p.ph) * 0.06;
       const x = cx + (p.x + roll) * rx, y = capY + p.y * ry + Math.cos(el * 0.0015 + p.ph) * ry * 0.05;
-      puff(x, y, Math.max(3, p.s * rx), col(p.sh, 1 - (p.y + 1) / 2), 0.55 * cA);
+      puff(x, y, Math.max(3, p.s * rx * (1.15 - 0.15 * side)), col(p.sh, 1 - (p.y + 1) / 2 * side), 0.55 * cA);
     }
     // glühender Kern im Hut, solange heiß
     if (heat > 0.02) {
