@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Detonationsradius</title>
+<meta name="description" content="Interaktive Karte: Wirkungszonen, Explosion und Opferschätzung für Atomwaffen, konventionelle Bomben und fiktive Szenarien.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Detonationsradius">
+<meta property="og:description" content="Wähle eine Waffe und einen Ort und sieh, was eine Explosion dort anrichten würde.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
@@ -108,7 +112,11 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
 .seg button { background: none; border: 0; color: var(--muted); padding: 8px; border-radius: 6px; font: 500 13px var(--body); cursor: pointer; }
 .seg button.on { background: var(--land); color: var(--text); }
 
-.actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.actions { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+.btn.share { padding: 0 13px; display: grid; place-items: center; }
+.btn.share svg { width: 18px; height: 18px; }
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 20px); background: var(--select); color: var(--ink); padding: 10px 16px; border-radius: 10px; font: 500 14px var(--body); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 50; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
 .btn { border: 0; border-radius: 8px; padding: 12px 16px; font: 600 15px/1 var(--body); letter-spacing: 0; cursor: pointer; }
 .btn.primary { background: var(--accent); color: #fff; }
 .btn.primary:hover { background: #ec5d61; }
@@ -198,6 +206,7 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
 </style>
 </head>
 <body>
+<div class="toast" id="toast" role="status"></div>
 <div class="app">
   <div class="map-wrap">
     <div class="stage" id="stage">
@@ -292,6 +301,7 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
     <div class="actions">
       <button class="btn primary" id="go">Zünden</button>
       <button class="btn ghost" id="reset">Zurücksetzen</button>
+      <button class="btn ghost share" id="share" aria-label="Szenario teilen" title="Szenario teilen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></button>
     </div>
 
 
@@ -1197,6 +1207,7 @@ function detonate() {
   state.boom = null;
   state.detonated = true;
   if (isPhone()) sheet(false);
+  try { history.replaceState(null, "", scenarioURL()); } catch (e) {}
   state.destroy = makeDestroy();
   bldReach = reduceMotion ? 1e9 : 0; applyBuildings();
   runEstimate();
@@ -1381,16 +1392,71 @@ $("legendToggle").addEventListener("click", () => {
   $("legendToggle").setAttribute("aria-expanded", String(!closed));
 });
 
+/* ---------- Teilen: Szenario steckt in der Adresse ----------
+   ?w=waffe&kt=…&t=nuc|conv&b=air|surface&lat=…&lon=…&z=… */
+const slug = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/ß/g, "ss").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+function scenarioURL() {
+  const q = new URLSearchParams();
+  const p = PRESETS[weaponIdx];
+  if (p) q.set("w", slug(p.name)); else { q.set("kt", String(+state.kt.toPrecision(4))); q.set("t", state.type); }
+  if (state.type !== "conv") q.set("b", state.burst);
+  q.set("lat", state.target[1].toFixed(4)); q.set("lon", state.target[0].toFixed(4));
+  q.set("z", map.getZoom().toFixed(1));
+  return location.origin + location.pathname + "?" + q.toString();
+}
+function nearestPlace() {
+  let best = null, bd = 40;                            // nächste größere Stadt im Umkreis von 40 km
+  for (const p of places) {
+    if (p[4] < 50000) continue;
+    const d = Math.hypot((p[3] - state.target[0]) * 111.32 * Math.cos(state.target[1] * Math.PI / 180), (p[2] - state.target[1]) * 110.57);
+    if (d < bd) { bd = d; best = p[0]; }
+  }
+  return best;
+}
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2200); }
+$("share").addEventListener("click", async () => {
+  const url = scenarioURL();
+  history.replaceState(null, "", url);
+  const p = PRESETS[weaponIdx], where = nearestPlace();
+  const text = `${p ? p.name : (state.type === "conv" ? "Explosion" : "Atombombe")} (${fmtYield(state.kt)})${where ? " über " + where : ""}`;
+  if (navigator.share && isPhone()) {
+    try { await navigator.share({ title: "Detonationsradius", text, url }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  try { await navigator.clipboard.writeText(url); toast("Link kopiert"); }
+  catch (e) { toast("Link steht jetzt in der Adresszeile"); }
+});
+function setBurst(v) {
+  state.burst = v === "surface" ? "surface" : "air";
+  document.querySelectorAll("#burst button").forEach(x => x.classList.toggle("on", x.dataset.v === state.burst));
+}
+function loadScenario() {
+  const q = new URLSearchParams(location.search);
+  const lat = parseFloat(q.get("lat")), lon = parseFloat(q.get("lon"));
+  if (!isFinite(lat) || !isFinite(lon)) return false;
+  state.target = [Math.max(-180, Math.min(180, lon)), Math.max(-85, Math.min(85, lat))];
+  const w = q.get("w"), idx = w ? PRESETS.findIndex(p => slug(p.name) === w) : -1;
+  if (idx >= 0) { weaponIdx = idx; const p = PRESETS[idx]; setType(p.type || "nuc", p.smoke, p.thermo, p.vstyle); setYield(p.kt); }
+  else { weaponIdx = -1; setType(q.get("t") === "conv" ? "conv" : "nuc"); setYield(parseFloat(q.get("kt")) || 15); }
+  setBurst(q.get("b"));
+  const z = parseFloat(q.get("z"));
+  return isFinite(z) ? Math.max(1, Math.min(18, z)) : null;
+}
+
 /* ---------- Start ---------- */
 resizeFx();
 window.addEventListener("resize", resizeFx);
 setYield(15);
+const sharedZoom = loadScenario();
+const shared = sharedZoom !== false;
 state.destroy = makeDestroy();
 bldReach = 1e9;
-map.jumpTo({ center: state.target, zoom: zoomFor(VIEW.still) });
-map.once("load", () => { map.jumpTo({ center: state.target, zoom: zoomFor(VIEW.still) }); schedule(); });
-$("hint").textContent = "Beispiel: Hiroshima-Bombe über Berlin. „Zünden“ spielt die Explosion ab.";
+const startZoom = () => (shared && sharedZoom) ? sharedZoom : zoomFor(VIEW.still);
+map.jumpTo({ center: state.target, zoom: startZoom() });
+map.once("load", () => { map.jumpTo({ center: state.target, zoom: startZoom() }); schedule(); });
+render();
+$("hint").textContent = shared ? "Geteiltes Szenario. „Zünden“ spielt die Explosion ab." : "Beispiel: Hiroshima-Bombe über Berlin. „Zünden“ spielt die Explosion ab.";
 fetch("data/places.json").then(r => r.json()).then(d => places = d).catch(() => {});
+if (shared) runEstimate();
 </script>
 </body>
 </html>
