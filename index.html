@@ -724,6 +724,7 @@ resizeFx();
 window.addEventListener("resize", resizeFx);
 setYield(15);
 map.jumpTo({ center: state.target, zoom: zoomFor(VIEW.still) });
+map.once("load", () => { map.jumpTo({ center: state.target, zoom: zoomFor(VIEW.still) }); schedule(); });
 $("hint").textContent = "Beispiel: Hiroshima-Bombe über Berlin. „Zünden“ spielt die Explosion ab.";
 fetch("data/places.json").then(r => r.json()).then(d => places = d).catch(() => {});
 </script>
