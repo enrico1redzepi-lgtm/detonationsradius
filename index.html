@@ -102,8 +102,14 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
 .fx .num small { display: block; color: var(--muted); font-size: 11px; }
 .fx .desc { grid-column: 2 / 4; color: var(--muted); font-size: 13px; }
 
-.todo { border: 1px dashed var(--line); border-radius: 8px; padding: 12px; color: var(--muted); font-size: 13px; }
-.todo strong { color: var(--text); font-weight: 600; }
+.cas { padding: 4px 14px 12px; border-top: 1px solid var(--line); }
+.cas-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 10px; }
+.cas-k { display: block; font: 500 11px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.cas-v { display: block; font: 500 20px/1.15 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+#casDead { color: #ff8b8e; }
+.cas-note { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+.fx .pop { display: block; color: var(--text); font-size: 12px; margin-top: 2px; }
+.panel .cas { padding-left: 0; padding-right: 0; }
 .foot { color: var(--muted); font-size: 12px; margin-top: auto; }
 .foot p { margin: 0 0 6px; max-width: 65ch; }
 
@@ -187,6 +193,13 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
         <span class="legend-sum" id="summary"></span>
         <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 15l6-6 6 6"/></svg>
       </button>
+      <div class="cas" id="cas" hidden>
+        <div class="cas-row">
+          <div><span class="cas-k">Tote</span><span class="cas-v" id="casDead">–</span></div>
+          <div><span class="cas-k">Verletzte</span><span class="cas-v" id="casInj">–</span></div>
+        </div>
+        <p class="cas-note" id="casNote"></p>
+      </div>
       <ul class="fx" id="fx"></ul>
     </section>
     <div class="flash" id="flash"></div>
@@ -234,10 +247,10 @@ input[type=range] { width: 100%; accent-color: var(--select); margin: 4px 0 0; }
     </div>
 
 
-    <div class="todo"><strong>Opferschätzung folgt im nächsten Schritt.</strong> Dafür kommen Bevölkerungsdaten (Einwohner je Quadratkilometer) und Sterbe- bzw. Verletzungsraten je Zone dazu.</div>
 
     <div class="foot">
       <p>Radien sind Näherungen nach den Skalierungsgesetzen aus Glasstone &amp; Dolan, „The Effects of Nuclear Weapons“ (1977). Wetter, Gelände und Bebauung verschieben sie im Ernstfall deutlich. Fallout ist noch nicht enthalten.</p>
+      <p>Opfermodell: Druckwellen-Raten nach U.S. Office of Technology Assessment (1979), ergänzt um Hitze- und Anfangsstrahlung. Bevölkerung: GHSL GHS-POP 2025, © Europäische Union (JRC). Gezählt wird die Wohnbevölkerung, tagsüber kann die Verteilung stark abweichen.</p>
       <p>Ortssuche: Natural Earth. Karten: MapTiler, OpenStreetMap-Mitwirkende.</p>
     </div>
   </aside>
@@ -523,7 +536,8 @@ function drawExplosion(now) {
   } else phase = "Pilzwolke steigt auf";
   $("tval").textContent = "T + " + fmtSec(Math.max(0.1, tPhysNow));
   $("tphase").textContent = phase;
-  if (el > TL.end) { state.boom = null; $("tphase").textContent = "Druckwelle erreicht 1 psi nach " + fmtSec(b.tPhys.light); }
+  if (el > TL.shockStart + TL.shockDur && casResult && !b.shown) { b.shown = true; const keep = state.boom; state.boom = null; showEstimate(); state.boom = keep; }
+  if (el > TL.end) { state.boom = null; $("tphase").textContent = "Druckwelle erreicht 1 psi nach " + fmtSec(b.tPhys.light); if (!b.shown) showEstimate(); }
 }
 
 function drawTarget() {
@@ -589,6 +603,113 @@ function thump(strength) {
 }
 
 
+/* ---------- Bevölkerung und Opferschätzung ----------
+   Bevölkerung: GHSL GHS-POP 2025 (EU-Kommission, JRC), Wohnbevölkerung je ~1-km-Zelle.
+   Opfer durch die Druckwelle nach dem Modell des U.S. Office of Technology Assessment
+   („The Effects of Nuclear War“, 1979): Anteil Tote/Verletzte je Überdruckbereich.
+   Die obere Schätzung rechnet zusätzlich Hitze- und Anfangsstrahlung ein. */
+const POP_N = 120;
+const popCache = new Map();
+function loadPopTile(lat, lon) {
+  const key = lat + "_" + lon;
+  if (!popCache.has(key)) {
+    popCache.set(key, fetch(`data/pop/${key}.bin.gz`).then(async r => {
+      if (!r.ok) return null;
+      const ds = r.body.pipeThrough(new DecompressionStream("gzip"));
+      const buf = await new Response(ds).arrayBuffer();
+      return new Uint16Array(buf);
+    }).catch(() => null));
+  }
+  return popCache.get(key);
+}
+const PSI_PTS = { air: [[0.20, 20], [0.47, 5], [1.22, 1]], surface: [[0.17, 20], [0.36, 5], [0.92, 1]] };
+function psiAt(dKm, W, burst) {
+  const s = Math.cbrt(W), pts = PSI_PTS[burst];
+  const x = Math.max(dKm / s, 1e-4);
+  let a = pts[0], b = pts[1];
+  if (x > pts[1][0]) { a = pts[1]; b = pts[2]; }
+  const k = Math.log(b[1] / a[1]) / Math.log(b[0] / a[0]);
+  return a[1] * Math.pow(x / a[0], k);
+}
+function blastRates(psi) { // [Tote, Verletzte] nach OTA 1979
+  if (psi >= 12) return [0.98, 0.02];
+  if (psi >= 5) return [0.50, 0.40];
+  if (psi >= 2) return [0.05, 0.45];
+  if (psi >= 1) return [0, 0.25];
+  return [0, 0];
+}
+async function estimateCasualties(target, W, burst) {
+  const rad = {}; EFFECTS.forEach(e => rad[e.id] = e.r(W, burst));
+  const R = Math.max(rad.light, rad.thermal, rad.rad);
+  const [lon0, lat0] = target;
+  const kmLat = 110.57, kmLon = 111.32 * Math.cos(lat0 * Math.PI / 180);
+  const dLat = R / kmLat, dLon = R / kmLon;
+  const tiles = [];
+  for (let la = Math.floor(lat0 - dLat); la <= Math.floor(lat0 + dLat); la++)
+    for (let lo = Math.floor(lon0 - dLon); lo <= Math.floor(lon0 + dLon); lo++) tiles.push([la, lo]);
+  const data = await Promise.all(tiles.map(([la, lo]) => loadPopTile(la, (lo + 540) % 360 - 180)));
+  const sub = R < 2 ? 8 : R < 6 ? 4 : R < 20 ? 2 : 1;
+  const out = { deadLo: 0, deadHi: 0, injLo: 0, injHi: 0, total: 0, inZone: {}, ok: data.some(Boolean) };
+  EFFECTS.forEach(e => out.inZone[e.id] = 0);
+  tiles.forEach(([la, lo], ti) => {
+    const arr = data[ti]; if (!arr) return;
+    for (let i = 0; i < POP_N; i++) {
+      for (let j = 0; j < POP_N; j++) {
+        const v = arr[i * POP_N + j]; if (!v) continue;
+        const cLat = la + 1 - (i + 0.5) / POP_N, cLon = lo + (j + 0.5) / POP_N;
+        const dy = (cLat - lat0) * kmLat, dx = (cLon - lon0) * kmLon;
+        if (Math.abs(dy) > R + 1 || Math.abs(dx) > R + 1) continue;
+        const p = (v / 100) * (v / 100) / (sub * sub);
+        for (let a = 0; a < sub; a++) for (let b = 0; b < sub; b++) {
+          const sy = dy + ((a + 0.5) / sub - 0.5) / POP_N * kmLat, sx = dx + ((b + 0.5) / sub - 0.5) / POP_N * kmLon;
+          const d = Math.hypot(sx, sy);
+          if (d > R) continue;
+          out.total += p;
+          for (const e of EFFECTS) if (d <= rad[e.id]) out.inZone[e.id] += p;
+          const [kb, ib] = blastRates(psiAt(d, W, burst));
+          const kr = d <= rad.rad ? 0.6 : 0, kt = d <= rad.thermal ? 0.15 : 0;
+          const kh = 1 - (1 - kb) * (1 - kr) * (1 - kt);
+          const ih = Math.min(1 - kh, ib + (d <= rad.thermal ? 0.2 : 0) + (d <= rad.rad ? 1 : 0));
+          out.deadLo += p * kb; out.injLo += p * ib;
+          out.deadHi += p * kh; out.injHi += p * ih;
+        }
+      }
+    }
+  });
+  return out;
+}
+function fmtPeople(n) {
+  if (n < 1000) return nf(Math.round(n / 10) * 10, 0);
+  if (n < 1e6) return nf(Math.round(n / 1000) * 1000, 0);
+  return nf(n / 1e6, n < 1e7 ? 2 : 1) + " Mio.";
+}
+let casResult = null, casToken = 0;
+function runEstimate() {
+  const token = ++casToken;
+  casResult = null;
+  $("cas").hidden = false;
+  $("casDead").textContent = "…"; $("casInj").textContent = "…";
+  $("casNote").textContent = "Bevölkerungsdaten werden geladen …";
+  estimateCasualties(state.target, state.kt, state.burst).then(r => {
+    if (token !== casToken) return;
+    casResult = r;
+    if (!state.boom) showEstimate();
+  });
+}
+function showEstimate() {
+  const r = casResult; if (!r || !state.detonated) return;
+  if (!r.ok) {
+    $("casDead").textContent = "–"; $("casInj").textContent = "–";
+    $("casNote").textContent = "Für diesen Ort liegen keine Bevölkerungsdaten vor (z. B. auf dem Meer).";
+  } else {
+    const range = (a, b) => fmtPeople(a) === fmtPeople(b) ? fmtPeople(a) : fmtPeople(a) + " – " + fmtPeople(b);
+    $("casDead").textContent = range(r.deadLo, r.deadHi);
+    $("casInj").textContent = range(r.injLo, r.injHi);
+    $("casNote").textContent = `${fmtPeople(r.total)} Menschen leben im betroffenen Gebiet. Untere Zahl: nur Druckwelle, obere: mit Hitze und Strahlung. Ohne Fallout.`;
+  }
+  render();
+}
+
 /* ---------- Ziel setzen und ziehen ---------- */
 let dragging = false, justDragged = 0;
 function nearTarget(pt) { if (!state.target) return false; const [x, y] = P(state.target); return Math.hypot(pt.x - x, pt.y - y) < 30; }
@@ -596,6 +717,7 @@ function clearDetonation() {
   boomToken++; state.detonated = false; state.boom = null; shakes = []; $("stage").style.transform = "";
   $("timer").classList.remove("show");
   $("hint").textContent = "„Zünden“ startet die Explosion.";
+  casToken++; casResult = null; $("cas").hidden = true;
   render();
 }
 function setTarget(ll) {
@@ -636,6 +758,7 @@ function detonate() {
   ++boomToken;
   state.boom = null;
   state.detonated = true;
+  runEstimate();
   $("hint").textContent = "Fadenkreuz ziehen oder auf die Karte tippen, um das Ziel zu verschieben";
   if (!reduceMotion) {
     $("flash").animate([{ opacity: 0.9 }, { opacity: 0 }], { duration: 650, easing: "ease-out" });
@@ -663,7 +786,7 @@ function render() {
     <li>
       <span class="dot" style="border-color:var(${e.color});background:color-mix(in srgb, var(${e.color}) 35%, transparent)"></span>
       <span class="name">${e.name}${e.unit ? ` <small>${e.unit}</small>` : ""}</span>
-      <span class="num">${fmtKm(e.km)}<small>${fmtArea(e.km)}</small></span>
+      <span class="num">${fmtKm(e.km)}<small>${fmtArea(e.km)}</small>${casResult && casResult.ok && state.detonated ? `<small class="pop">${fmtPeople(casResult.inZone[e.id])} Einw.</small>` : ""}</span>
       <span class="desc">${e.desc(state.burst)} ${BLAST[e.id] ? `Die Druckwelle trifft nach ≈ ${fmtSec(shockTime(e.km, state.kt))} ein.` : e.id === "thermal" || e.id === "rad" ? "Wirkt mit dem Lichtblitz, also sofort." : ""}</span>
     </li>`).join("");
   schedule();
